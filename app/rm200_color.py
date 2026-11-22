@@ -860,8 +860,8 @@ class AdvisorApp(tk.Tk):
         self._led.pack(side=tk.LEFT, pady=6)
         self._led_dot = self._led.create_oval(3, 3, 19, 19, fill='#c62828', outline='')
         self._led_text = tk.Label(bar, text="기계 연결 안 됨", bg='#f4f6fa', fg='#c62828',
-                                  font=('맑은 고딕', 10, 'bold'), width=34, anchor='w')
-        self._led_text.pack(side=tk.LEFT, padx=(6, 18))
+                                  font=('맑은 고딕', 10, 'bold'), width=28, anchor='w')
+        self._led_text.pack(side=tk.LEFT, padx=(6, 8))
         self._alert_btn = tk.Button(bar, text="경고 보기", command=lambda: self._show_alert_window(
             getattr(self, '_last_lcd', None)), relief=tk.FLAT, padx=10, pady=2,
             font=('맑은 고딕', 10, 'bold'), bg='#c62828', fg='white', activebackground='#9e1f1f',
@@ -871,30 +871,30 @@ class AdvisorApp(tk.Tk):
             activebackground='#c25700', activeforeground='white', cursor='hand2')
         self._devtime_var = tk.StringVar(value="기계 시각: -")
         self._devtime_lbl = tk.Label(bar, textvariable=self._devtime_var, bg='#f4f6fa', fg='#333',
-                                     font=('맑은 고딕', 10, 'bold'), width=42, anchor='w')
-        self._devtime_lbl.pack(side=tk.LEFT)
+                                     font=('맑은 고딕', 10, 'bold'), width=42, anchor='e')
+        self._devtime_lbl.pack(side=tk.LEFT)   # Ver 0.27: 글자를 오른쪽에 붙여 [맞음] 단추와 딱 붙게
         # Ver 0.10: 동기화 단추는 기계 시각 바로 옆, 맞으면 꺼짐("맞음"), 틀리면 켜짐
         self._sync_btn = tk.Button(bar, text="확인 중", command=self._on_sync_time,
                                    relief=tk.FLAT, padx=12, pady=2, font=('맑은 고딕', 10, 'bold'),
                                    cursor='hand2', state=tk.DISABLED, bg='#d5dbe5', fg='#666',
                                    disabledforeground='#666')
-        self._sync_btn.pack(side=tk.LEFT, padx=(8, 0), pady=4)
-        self._cal_lbl = tk.Label(bar, text="", bg='#f4f6fa', fg='#555', font=('맑은 고딕', 10, 'bold'))
-        self._cal_lbl.pack(side=tk.LEFT, padx=(14, 0))
+        self._sync_btn.pack(side=tk.LEFT, padx=(2, 0), pady=4)
+        self._cal_lbl = tk.Label(bar, text="", bg='#f4f6fa', fg='#555', font=('맑은 고딕', 11, 'bold'))
+        self._cal_lbl.pack(side=tk.LEFT, padx=(20, 0))
         self._cal_btn = tk.Button(bar, text="교정하기", command=self._auto_calibrate,
-                                  relief=tk.FLAT, padx=10, pady=2, font=('맑은 고딕', 10, 'bold'),
+                                  relief=tk.FLAT, padx=12, pady=3, font=('맑은 고딕', 11, 'bold'),
                                   bg='#e65100', fg='white', activebackground='#bf4300',
                                   activeforeground='white', cursor='hand2')
         self._cal_first = None
         # 엑스라이트 서버 상태(오른쪽)
-        self._xs_btn = tk.Button(bar, text="업데이트 확인", command=self._on_xs_button,
+        self._xs_btn = tk.Button(bar, text="팬덱 새 판 확인", command=self._on_xs_button,
                                  relief=tk.FLAT, padx=12, pady=2, font=('맑은 고딕', 10, 'bold'),
                                  cursor='hand2', bg='#1e6fd9', fg='white', activebackground='#1559b0',
                                  activeforeground='white', disabledforeground='#666')
         self._xs_btn.pack(side=tk.RIGHT, padx=8, pady=4)
-        self._xs_text = tk.Label(bar, text="엑스라이트 서버: 아직 확인 안 함", bg='#f4f6fa', fg='#555',
+        self._xs_text = tk.Label(bar, text="팬덱 확인 전", bg='#f4f6fa', fg='#555',
                                  font=('맑은 고딕', 10))
-        self._xs_text.pack(side=tk.RIGHT)
+        self._xs_text.pack(side=tk.RIGHT, padx=(16, 0))
         self._xs_led = tk.Canvas(bar, width=18, height=18, bg='#f4f6fa', highlightthickness=0)
         self._xs_led.pack(side=tk.RIGHT, padx=(0, 4))
         self._xs_dot = self._xs_led.create_oval(2, 2, 16, 16, fill='#b0b6c0', outline='')
@@ -2582,16 +2582,19 @@ class AdvisorApp(tk.Tk):
     def _xs_set(self, state, text):
         self._xs_state = state
         col = {'idle': '#555', 'talk': '#1a9e00', 'ok': '#2e7d32', 'new': '#ef6c00', 'err': '#c62828'}[state]
-        self._xs_text.config(text="엑스라이트 서버: " + text, fg=col)
+        short = text.split(" (")[0].replace("입니다", "")
+        if len(short) > 14:
+            short = short[:13] + "…"
+        self._xs_text.config(text="팬덱 " + short, fg=col)
         if state == 'new':
             self._xs_btn.config(state=tk.NORMAL, text=f"업데이트 ({len(self._xs_new)}개)", bg='#ef6c00',
                                 activebackground='#c75a00')
         elif state == 'talk':
             self._xs_btn.config(state=tk.DISABLED, text="주고받는 중", bg='#d5dbe5')
         elif state == 'ok':
-            self._xs_btn.config(state=tk.NORMAL, text="다시 확인", bg='#1e6fd9', activebackground='#1559b0')
+            self._xs_btn.config(state=tk.NORMAL, text="팬덱 새 판 확인", bg='#1e6fd9', activebackground='#1559b0')
         else:
-            self._xs_btn.config(state=tk.NORMAL, text="업데이트 확인", bg='#1e6fd9', activebackground='#1559b0')
+            self._xs_btn.config(state=tk.NORMAL, text="팬덱 새 판 확인", bg='#1e6fd9', activebackground='#1559b0')
 
     def _on_xs_button(self):
         if self._xs_state == 'new':
