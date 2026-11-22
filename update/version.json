@@ -1,0 +1,17 @@
+{
+ "ver": "0.26",
+ "files": {
+  "make_shortcut.py": "f8bfe70f0ebaedc0a7c784fafc580a42ec0d826f45f339a5b589e4b0a3439223",
+  "pantone_fandecks.json": "4e7059ebef090795cfd2b323d264d95d1dc20501604776493657ee27bb2d5e0a",
+  "rm200_color.py": "5bd283dd5a7b68d2a47c29ac2ace302647f0a039bab1bf0f2aa44f4c0e47881d",
+  "rm200_safe.py": "02015bbeaa0510e1d2b14bcc8e9c962bb6b43c347dfe73cfc39a18074de12ac8",
+  "rm200_sync.py": "bd85113bbd94cbecf72f4dfaeae8bf17f1f1a76f9bb0b415c2fcc11d0944647b",
+  "rm200_update.py": "9ec7509cf9f35cd0cf92c2ab4255fe4707358e2474caa87836dc925306253cea",
+  "rm200color.ico": "c340940dd203b48e21982d4cb167315da5283aaffc77b3a913bd094bf5a1b33f",
+  "rm200lib.py": "6a2d1bfd323783848b7f76925fee743b5ec4f8ff9bab3eb6056a609aec1ca72c",
+  "run.py": "f0ecaac8a3d3a4de8f4fde77a947475a609bd33076c94f522d966ba68c842ad1",
+  "xrite_sync.py": "8c26c218704ef012744c4aebdacfa62f4d0f02e35125aeac7a8b08c28a5461c2"
+ },
+ "full": false,
+ "note": "tools/app 파일만 바꿈"
+}
