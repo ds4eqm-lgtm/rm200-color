@@ -2004,6 +2004,11 @@ class AdvisorApp(tk.Tk):
                             activebackground='#1557b0', activeforeground='white', cursor='hand2',
                             padx=18, pady=8)
         C['go'].pack(anchor='w')
+        C['rb'] = tk.Button(right, text="기계 다시 켜기 (처음 화면으로)", command=lambda: self._cal_reboot(C),
+                            font=('맑은 고딕', 11, 'bold'), bg='#455a64', fg='white', relief=tk.FLAT,
+                            activebackground='#37474f', activeforeground='white', cursor='hand2',
+                            padx=12, pady=4)
+        C['rb'].pack(anchor='w', pady=(10, 0))
         tk.Button(right, text="단추로 직접 하기(기계 화면 칸)", command=lambda: self._cal_manual(),
                   relief=tk.FLAT, fg='#1e6fd9', bg='#ffffff', cursor='hand2',
                   font=('맑은 고딕', 10, 'underline')).pack(anchor='w', pady=(14, 0))
@@ -2011,6 +2016,33 @@ class AdvisorApp(tk.Tk):
                   font=('맑은 고딕', 11), cursor='hand2').pack(pady=(8, 12))
         w.protocol("WM_DELETE_WINDOW", self._cal_close)
         self._cal_peek(C)
+
+    def _cal_reboot(self, C):
+        if C.get('run') or self.busy:
+            return
+        C['run'] = True
+        self._set_busy(True, "기계를 다시 켜는 중입니다(10초쯤)...")
+        C['state'].set("기계를 다시 켜는 중입니다(10초쯤)...")
+
+        def worker():
+            ok = self._reboot_device()
+            lcd = None
+            try:
+                time.sleep(1.5)
+                with rm.LOCK:
+                    lcd = rm.GetLcdData()
+            except Exception:
+                pass
+
+            def done():
+                self._set_busy(False); C['run'] = False; self._hb_n = 0
+                if not C.get('alive'):
+                    return
+                self._cal_draw(C, lcd)
+                C['state'].set("다시 켰습니다. 처음 화면입니다." if ok
+                               else "다시 켠 뒤 연결하지 못했습니다. [USB 다시 연결]을 누르시거나 USB 선을 확인하십시오.")
+            self.after(0, done)
+        threading.Thread(target=worker, daemon=True).start()
 
     def _cal_close(self):
         C = getattr(self, '_cal_C', None)
@@ -2081,14 +2113,6 @@ class AdvisorApp(tk.Tk):
                 return None, None, None
             return (cs == 1 and left not in (0, None)), cs, left
 
-        def press_center():
-            with rm.LOCK:
-                rm.REMOTE_KEYS = True
-                try:
-                    rm.PressKey(1)
-                finally:
-                    rm.REMOTE_KEYS = False
-
         def worker():
             ok = False
             log = self._meas_log
@@ -2096,30 +2120,48 @@ class AdvisorApp(tk.Tk):
             try:
                 done, cs, left = calibrated()
                 log(f"  처음 교정 상태 {cs!r}, 남은 값 {left!r}")
-                # 기계가 할 일: (가) 옆 측정 단추로 교정 찍기 → (나) 확인 창이면 가운데 단추
-                steps = ['trigger', 'center', 'trigger', 'center', 'trigger']
-                for i, st in enumerate(steps):
+                # Ver 0.28: 실제 기계에서 가운데 단추가 메뉴로 들어가 버려, PC는 옆 측정 단추만 누름.
+                shots = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(PALETTES_FILE))), "교정_화면기록")
+                stamp = time.strftime('%Y%m%d_%H%M%S')
+
+                def keep(lcd, tag):
+                    try:
+                        os.makedirs(shots, exist_ok=True)
+                        lcd_image(lcd).save(os.path.join(shots, f"{stamp}_{tag}.png"))
+                    except Exception:
+                        pass
+                lcd = look()
+                if lcd:
+                    keep(lcd, "0_시작")
+                # Ver 0.28: 먼저 기계를 다시 켜서 처음 화면에서 시작(메뉴·경고 창 정리, USB 다시 연결)
+                say("기계를 다시 켜서 처음 화면으로 돌리는 중입니다(10초쯤)...")
+                log("  시작 전 기계 다시 켜기")
+                if not self._reboot_device():
+                    log("  다시 켠 뒤 연결 실패")
+                    raise RuntimeError("기계를 다시 켠 뒤 연결하지 못했습니다. USB 선을 확인해 주십시오")
+                time.sleep(2.0)
+                lcd = look()
+                if lcd:
+                    keep(lcd, "0_다시켠뒤")
+                for i in range(2):
                     if not C.get('alive'):
                         break
-                    lcd = look()
                     if lcd and lcd_has_alert(lcd):
-                        say("기계 화면의 경고 창을 닫는 중...")
-                        log("  경고 창 → 가운데 단추")
-                        press_center(); time.sleep(2.0)
-                        continue
-                    if st == 'trigger':
-                        say(f"교정판을 재는 중입니다 ({i // 2 + 1}번째)...")
-                        log("  옆 측정 단추(7835)")
-                        with rm.LOCK:
-                            rm.TriggerMeasurement(self.aperture)
-                    else:
-                        say("기계 화면의 확인을 누르는 중...")
-                        log("  가운데 단추(확인)")
-                        press_center()
+                        log("  기계 화면에 경고 창 → 멈춤(PC는 단추를 누르지 않음)")
+                        C['why'] = 'alert'
+                        break
+                    say(f"교정판을 재는 중입니다 ({i + 1}번째)...")
+                    log(f"  옆 측정 단추(7835) {i + 1}번째")
+                    with rm.LOCK:
+                        rm.TriggerMeasurement(self.aperture)
                     t0 = time.time()
-                    while time.time() - t0 < 12 and C.get('alive'):
+                    n = 0
+                    while time.time() - t0 < 15 and C.get('alive'):
                         time.sleep(1.5)
-                        look()
+                        lcd = look()
+                        n += 1
+                        if lcd and n in (1, 3, 6):
+                            keep(lcd, f"{i + 1}_{n}")
                         done, cs, left = calibrated()
                         if done:
                             break
@@ -2132,6 +2174,16 @@ class AdvisorApp(tk.Tk):
                 say(f"오류: {e}", '#c62828')
             finally:
                 rm.REMOTE_KEYS = False
+            if not ok and C.get('alive'):
+                # 끝나지 않았으면 기계를 다시 켜서 처음 화면으로 돌려놓음
+                say("끝나지 않아 기계를 다시 켜서 처음 화면으로 돌리는 중입니다...")
+                log("  실패 → 기계 다시 켜기")
+                try:
+                    self._reboot_device()
+                    time.sleep(1.5)
+                    look()
+                except Exception:
+                    pass
             log("[0점 맞추기] " + ("끝(성공)" if ok else "끝나지 않음"))
 
             def fin():
@@ -2150,8 +2202,10 @@ class AdvisorApp(tk.Tk):
                     C['go'].config(text="끝났습니다", state=tk.DISABLED, bg='#2e7d32')
                     self._set_status("0점 맞추기(교정)를 마쳤습니다")
                 else:
-                    C['state'].set("PC로는 끝나지 않았습니다. 기계가 교정판 위에 있는지 확인하고 다시 누르시거나, "
-                                   "[단추로 직접 하기]에서 기계 화면 안내대로 눌러 주십시오.")
+                    C['state'].set("PC로는 끝나지 않았습니다. PC는 더 누르지 않았습니다.\n"
+                                   "왼쪽 기계 화면 안내대로 기계 단추로 교정하시거나, "
+                                   "[단추로 직접 하기]에서 화면을 보며 눌러 주십시오."
+                                   + ("\n(기계 화면에 경고 창이 있어 멈췄습니다)" if C.get('why') == 'alert' else ""))
                     C['lbl'].config(fg='#c62828')
                     C['go'].config(text="다시 해 보기", state=tk.NORMAL)
                     self._set_status("0점 맞추기가 끝나지 않았습니다")
