@@ -2953,6 +2953,21 @@ class AdvisorApp(tk.Tk):
                 dev_new.append(f)
         self._xs_new = new
         self._xs_dev_new = dev_new
+        # Ver 0.44: 서버 최신 판 번호를 공용 저장소에 남겨 휴대폰 앱의 [팬덱 새 판 확인]도 비교할 수 있게 함
+        if getattr(self, '_cloud_on', False):
+            latest = {'checked': dt.datetime.now().strftime('%Y-%m-%d %H:%M'), 'by': self._pc_name,
+                      'decks': {f['SKU']: {'ver': f['VersionString'], 'desc': f['Description']}
+                                for f in files if f.get('FileType') == 'Fandeck' and f.get('SKU')}}
+
+            def up():
+                try:
+                    for _ in range(3):
+                        _, u = cloud.get_doc('xrite_latest')
+                        if cloud.put_doc('xrite_latest', latest, u, self._pc_name):
+                            break
+                except Exception:
+                    pass
+            threading.Thread(target=up, daemon=True).start()
         if new:
             self._xs_set('new', f"새 판 {len(new)}개 있음 ({now} 확인)")
             if manual:

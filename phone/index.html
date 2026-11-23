@@ -25,7 +25,7 @@ header{position:sticky;top:0;z-index:5;background:var(--navy);color:#fff;padding
 .chip i{width:8px;height:8px;border-radius:50%;background:#66bb6a;animation:bl 1.6s infinite}
 @keyframes bl{50%{opacity:.25}}
 nav{display:flex;gap:6px;padding:10px 16px 0;max-width:640px;margin:0 auto;overflow-x:auto}
-nav button{flex:1 0 auto;padding:10px 12px;font-size:15px;font-weight:700;border-radius:10px;background:#e3e9f3;color:var(--navy)}
+nav button{flex:1 0 auto;padding:10px 8px;font-size:14px;font-weight:700;border-radius:10px;background:#e3e9f3;color:var(--navy)}
 nav button.on{background:var(--blue);color:#fff}
 main{padding:12px 16px 20px;max-width:640px;margin:0 auto}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
@@ -57,6 +57,21 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
 #sheet .in{background:#fff;width:100%;max-width:520px;border-radius:16px 16px 0 0;padding:20px 18px 26px}
 #sheet label{display:flex;gap:10px;align-items:center;font-size:16px;padding:9px 0}
 #sheet input{width:20px;height:20px}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:6px;margin-top:10px}
+.pgrid .t{border:1px solid var(--line);border-radius:8px;overflow:hidden;cursor:pointer;background:#fff}
+.pgrid .t i{display:block;height:46px}
+.pgrid .t span{display:block;font-size:10.5px;padding:3px 4px;line-height:1.25;word-break:break-all}
+.pdet{position:fixed;left:0;right:0;bottom:0;background:#fff;border-radius:16px 16px 0 0;box-shadow:0 -4px 20px rgba(0,0,0,.2);padding:16px;z-index:14;max-height:80vh;overflow:auto}
+#pmark{position:absolute;width:26px;height:26px;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #000;transform:translate(-50%,-50%);display:none;pointer-events:none}
+#go.flash{animation:fl .35s 3}
+@keyframes fl{50%{background:#43a047}}
+.bsel{position:sticky;top:96px;z-index:4;display:flex;gap:6px;align-items:center;background:#fff;padding:8px 0;border-bottom:1px solid var(--line)}
+.bsel button{padding:9px 11px;font-size:14px;font-weight:700;background:#e8eef8;color:var(--navy)}
+.bsel span{margin-left:auto;font-size:13px;color:var(--sub);font-weight:700}
+.fd{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line);font-size:16px;cursor:pointer}
+.fd i{width:24px;height:24px;border-radius:50%;border:3px solid #999;flex:none;box-sizing:border-box}
+.fd.on i{border-color:var(--blue);background:radial-gradient(circle,var(--blue) 0 45%,#fff 50%)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:15px}.kv b{color:var(--sub);font-weight:600}
 .hidden{display:none}
 </style>
 </head>
@@ -69,7 +84,8 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
   <button data-t="meas" class="on">측정</button>
   <button data-t="log">함께 본 기록</button>
   <button data-t="pal">내 팔레트</button>
-  <button data-t="find">팬톤 찾기</button>
+  <button data-t="find">팬톤 색</button>
+  <button data-t="dev">기계</button>
 </nav>
 <main>
 <!-- 측정 -->
@@ -81,15 +97,17 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
   <div class="card" id="usbcard">
     <button class="big" id="go">기계 연결</button>
     <div class="msg" id="msg">RM200을 USB 선으로 꽂고 [기계 연결]을 누르십시오. (휴대폰은 USB-C OTG 젠더)</div>
+    <details style="margin-top:8px"><summary class="dim">기계 대답 기록 (문제 찾기용)</summary><pre id="dbg" style="font-size:11px;white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto;margin:6px 0 0"></pre></details>
   </div>
   <div class="card" id="bulk" style="display:none">
     <h4>출장에서 잰 색 한꺼번에 불러오기</h4>
     <p class="note" style="margin:0 0 8px">기계에 쌓인 측정값을 모두 읽습니다(기계 안의 기록은 지우지 않음). 방금 잰 것이 없으면 [다시 켜고 읽기]를 누르십시오. 기계가 다시 켜질 때 기록을 적습니다(0점은 그대로).</p>
     <div style="display:flex;gap:8px"><button class="sub" id="bread" style="margin:0">기계 기록 읽기</button><button class="sub" id="brb" style="margin:0">다시 켜고 읽기</button></div>
     <div class="msg" id="bmsg"></div>
+    <div id="bsel" class="bsel hidden"><button id="ball">전체 선택</button><button id="bnone">전체 해제</button><button id="bnew">새 것만</button><span id="bcnt"></span></div>
+    <div class="note hidden" id="btip" style="margin:4px 0">네모 칸을 누르면 고르기·풀기, 색 이름을 누르면 비슷한 팬톤색을 봅니다.</div>
     <div id="blist"></div>
     <div id="bput" class="hidden">
-      <div style="display:flex;gap:8px;margin:8px 0"><button class="sub" id="bnew" style="margin:0;font-size:14px">새 것 모두 고르기</button><button class="sub" id="bnone" style="margin:0;font-size:14px">모두 풀기</button></div>
       <input type="text" id="bpal">
       <button class="big" id="bgo" style="margin-top:10px">고른 색 내 팔레트에 넣기</button>
       <p class="note" style="margin:6px 0 0">공용 저장소의 내 팔레트에 넣고 [함께 본 기록]에도 올립니다. PC 프로그램과 다른 휴대폰에서 바로 보입니다.</p>
@@ -113,6 +131,21 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
   <div class="card"><h4>모든 기기에서 잰 색 <span class="pill" id="logn"></span></h4><div id="log"></div>
   <p class="note">PC 프로그램과 이 앱에서 잰 색이 함께 쌓입니다(최근 200개). 눌러서 우리 물건 중 가까운 것을 봅니다.</p></div>
 </section>
+<!-- 기계 -->
+<section id="t-dev" class="hidden">
+  <div class="card" id="devoff"><b>기계를 USB로 연결하면 여기서 기계 정보와 팬덱(색 견본책)을 봅니다.</b><p class="note" style="margin:6px 0 0">[측정] 칸에서 [기계 연결]을 먼저 누르십시오. 아이폰·사파리·삼성 인터넷은 기계 연결이 안 됩니다.</p></div>
+  <div class="card"><h4>기계 정보</h4>
+    <button class="sub" id="dinfo" style="margin:0">기계 정보 읽기</button>
+    <div id="dinfo_o" class="kv" style="margin-top:10px"></div></div>
+  <div class="card"><h4>팬덱(색 견본책) 고르기</h4>
+    <p class="note" style="margin:0 0 8px">파란 동그라미가 켜진 견본책입니다. 기계는 켜진 견본책 안에서만 가장 가까운 팬톤색을 고릅니다. 동그라미를 누르면 켜고 끕니다(기계 설정을 바꾸므로 한 번 묻습니다).</p>
+    <button class="sub" id="dfd" style="margin:0">팬덱 목록 읽기</button>
+    <div id="dfd_o" style="margin-top:6px"></div></div>
+  <div class="card"><h4>팬덱 새 판 확인</h4>
+    <p class="note" style="margin:0 0 8px">기계 안 팬덱의 판 번호를 엑스라이트 서버의 최신 판과 비교합니다. 서버 판 번호는 PC 프로그램이 [팬덱 새 판 확인]을 할 때 공용 저장소에 남긴 것을 씁니다(휴대폰 브라우저는 엑스라이트 서버에 직접 물을 수 없음). 기계에 새 판을 넣는 일은 PC 프로그램에서 합니다.</p>
+    <button class="sub" id="dver" style="margin:0">팬덱 새 판 확인</button>
+    <div id="dver_o" style="margin-top:8px"></div></div>
+</section>
 <!-- 내 팔레트 -->
 <section id="t-pal" class="hidden">
   <div class="card"><h4>내 팔레트 <span class="pill" id="paln"></span></h4>
@@ -125,6 +158,15 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
   <div class="card"><h4>팬톤 번호로 찾기</h4>
   <input type="search" id="pq" placeholder="예: 17-3938, 179 C, 2925">
   <div id="pres" style="margin-top:8px"></div></div>
+  <div class="card"><h4>사진에서 색 고르기</h4>
+  <p class="note" style="margin:0 0 8px">휴대폰으로 찍은 사진을 고르고, 사진에서 색을 알고 싶은 곳을 누르십시오. 비슷한 팬톤색을 골라 드립니다. 사진은 빛과 카메라에 따라 색이 달라지므로 대강 찾는 데 쓰시고, 정확한 색은 기계로 재십시오.</p>
+  <label class="sub" style="display:block;text-align:center;cursor:pointer;margin:0">사진 고르기<input type="file" id="pfile" accept="image/*" style="display:none"></label>
+  <div id="pwrap" class="hidden" style="position:relative;margin-top:10px"><canvas id="pcv" style="width:100%;border-radius:10px;touch-action:manipulation"></canvas><div id="pmark"></div></div>
+  <div id="ppick" style="margin-top:8px"></div></div>
+  <div class="card"><h4>팬톤색 보기 (견본책)</h4>
+  <select id="pdeck" style="width:100%;font:inherit;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:10px"></select>
+  <div id="pgrid" class="pgrid"></div>
+  <button class="sub" id="pmore">더 보기</button></div>
 </section>
 <div class="card note">
   <button class="sub" id="inst" style="margin-top:0">홈 화면(바탕화면)에 바로가기</button>
@@ -161,11 +203,12 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
     <button class="sub" id="qrno">닫기</button>
   </div>
 </div>
+<div id="pdet" class="pdet hidden"></div>
 <div id="toast"></div>
 <script src="qrcode.js"></script>
 <script>
 'use strict';
-const VER = '0.3';
+const VER = '0.46';
 const VID = 0x0765, PID = 0x6001;
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -180,7 +223,7 @@ const KAKAO = /KAKAOTALK/i.test(UA);
 // ---------------------------------------------------------------- 탭
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
-  for (const t of ['meas','log','pal','find']) $('t-' + t).classList.toggle('hidden', t !== b.dataset.t);
+  for (const t of ['meas','log','pal','find','dev']) $('t-' + t).classList.toggle('hidden', t !== b.dataset.t);
   if (b.dataset.t === 'log') loadLog();
   if (b.dataset.t === 'pal') loadPal();
 });
@@ -219,7 +262,7 @@ async function pantone(){
   const js = await (await fetch('pantone.json')).json();
   PT = new Map(); PTL = [];
   for (const d of js.decks) for (const c of d.c){
-    const it = {name: c[0], lab: [c[1],c[2],c[3]], deck: d.k || d.n};
+    const it = {name: c[0], lab: [c[1],c[2],c[3]], deck: d.k || d.n, deckN: d.n};
     PT.set(norm(c[0]), it); PTL.push(it);
   }
   return PT;
@@ -239,6 +282,86 @@ $('pq').oninput = async () => {
   $('pres').innerHTML = hits.length ? hits.map(x => `<div class="row tap" data-l="${x.lab.join(',')}" data-n="${esc(x.name)}"><span class="c" style="background:${lab2rgb(...x.lab)}"></span>PANTONE ${esc(x.name)}<small>${esc(x.deck)}</small></div>`).join('') : '<div class="dim">찾지 못했습니다</div>';
 };
 $('pres').onclick = e => { const r = e.target.closest('.row'); if (r) ownNear(r.dataset.n, r.dataset.l.split(',').map(Number), $('pres'), r); };
+
+// ---------------------------------------------------------------- 팬톤색 보기 · 사진에서 고르기 (Ver 0.4)
+function rgb2lab(r, g, b){
+  const f = v => { v /= 255; return v > 0.04045 ? ((v + 0.055) / 1.055) ** 2.4 : v / 12.92; };
+  const R = f(r), G = f(g), B = f(b);
+  let x = (R*0.4124 + G*0.3576 + B*0.1805) / 0.95047, y = R*0.2126 + G*0.7152 + B*0.0722, z = (R*0.0193 + G*0.1192 + B*0.9505) / 1.08883;
+  const h = t => t > 0.008856 ? Math.cbrt(t) : 7.787*t + 16/116;
+  x = h(x); y = h(y); z = h(z);
+  return [116*y - 16, 500*(x - y), 200*(y - z)].map(v => Math.round(v*100)/100);
+}
+function ptNear(lab, n, deck){
+  if (!PTL) return [];
+  const src = deck ? PTL.filter(x => x.deck === deck) : PTL;
+  return src.map(x => [(x.lab[0]-lab[0])**2 + (x.lab[1]-lab[1])**2 + (x.lab[2]-lab[2])**2, x]).sort((a, b) => a[0] - b[0]).slice(0, 80)
+    .map(([, x]) => ({...x, de: de2000(...lab, ...x.lab)})).sort((a, b) => a.de - b.de).slice(0, n);
+}
+function ptNearHtml(lab){
+  const near = ptNear(lab, 3);
+  return near.length ? '<div class="dim">비슷한 팬톤색</div>' + near.map(x => `<div class="row"><span class="c" style="background:${lab2rgb(...x.lab)}"></span>PANTONE ${esc(x.name)}<small>ΔE ${x.de.toFixed(2)}<br>${esc(x.deck)}</small></div>`).join('') : '';
+}
+let PDK = [], PSHOW = 0;
+async function deckInit(){
+  if (PDK.length) return;
+  await pantone();
+  const m = new Map(); for (const x of PTL){ if (!m.has(x.deck)) m.set(x.deck, []); m.get(x.deck).push(x); }
+  PDK = [...m.entries()];
+  $('pdeck').innerHTML = PDK.map(([k, v], i) => `<option value="${i}">${esc(k)} (${v.length}색)</option>`).join('');
+  PSHOW = 0; deckDraw();
+}
+function deckDraw(more){
+  const L = (PDK[+$('pdeck').value] || [null, []])[1];
+  if (!more){ $('pgrid').innerHTML = ''; PSHOW = 0; }
+  const part = L.slice(PSHOW, PSHOW + 240); PSHOW += part.length;
+  $('pgrid').insertAdjacentHTML('beforeend', part.map(x => `<div class="t" data-n="${esc(x.name)}"><i style="background:${lab2rgb(...x.lab)}"></i><span>${esc(x.name)}</span></div>`).join(''));
+  $('pmore').classList.toggle('hidden', PSHOW >= L.length);
+}
+$('pdeck').onchange = () => deckDraw(false);
+$('pmore').onclick = () => deckDraw(true);
+async function ptDetail(x){
+  const items = palItems(await palettes());
+  const own = items.map(y => ({...y, de: de2000(...x.lab, ...y.lab)})).sort((a, b) => a.de - b.de).slice(0, 5);
+  const sim = ptNear(x.lab, 6).filter(y => y.name !== x.name).slice(0, 5);
+  $('pdet').innerHTML = `<div class="sw" style="height:110px;background:${lab2rgb(...x.lab)}"></div><div class="code">PANTONE ${esc(x.name)}</div><div class="dim">${esc(x.deck)} · L ${x.lab[0]} a ${x.lab[1]} b ${x.lab[2]}</div>`
+    + (own.length ? '<h4 style="margin-top:12px">우리 물건 중 가까운 것</h4>' + own.map(y => `<div class="row"><span class="c" style="background:${lab2rgb(...y.lab)}"></span>${esc(y.name)}<small>ΔE ${y.de.toFixed(2)}<br>${esc(y.pal)}</small></div>`).join('') : '')
+    + '<h4 style="margin-top:12px">비슷한 팬톤색</h4>' + sim.map(y => `<div class="row"><span class="c" style="background:${lab2rgb(...y.lab)}"></span>PANTONE ${esc(y.name)}<small>ΔE ${y.de.toFixed(2)}<br>${esc(y.deck)}</small></div>`).join('')
+    + '<button class="sub" id="pdetx">닫기</button>';
+  $('pdet').classList.remove('hidden');
+  $('pdetx').onclick = () => $('pdet').classList.add('hidden');
+}
+$('pgrid').onclick = e => { const t = e.target.closest('.t'); if (!t) return; const x = PT.get(norm(t.dataset.n)); if (x) ptDetail(x); };
+document.querySelector('nav button[data-t=find]').addEventListener('click', () => deckInit().catch(() => {}));
+// 사진에서 색 고르기
+$('pfile').onchange = () => {
+  const f = $('pfile').files[0]; if (!f) return;
+  const img = new Image();
+  img.onload = () => {
+    const c = $('pcv'), k = Math.min(1, 1400 / Math.max(img.width, img.height));
+    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    $('pwrap').classList.remove('hidden'); $('pmark').style.display = 'none';
+    $('ppick').innerHTML = '<div class="dim">사진에서 색을 알고 싶은 곳을 누르십시오</div>';
+    URL.revokeObjectURL(img.src);
+  };
+  img.src = URL.createObjectURL(f);
+};
+$('pcv').onclick = async e => {
+  const c = $('pcv'), r = c.getBoundingClientRect();
+  const x = Math.round((e.clientX - r.left) * c.width / r.width), y = Math.round((e.clientY - r.top) * c.height / r.height);
+  const s = Math.max(2, Math.round(c.width / 150));
+  const d = c.getContext('2d').getImageData(Math.max(0, x - s), Math.max(0, y - s), 2*s + 1, 2*s + 1).data;
+  let R = 0, G = 0, B = 0, n = 0; for (let i = 0; i < d.length; i += 4){ R += d[i]; G += d[i+1]; B += d[i+2]; n++; }
+  R = Math.round(R/n); G = Math.round(G/n); B = Math.round(B/n);
+  $('pmark').style.left = (e.clientX - r.left) + 'px'; $('pmark').style.top = (e.clientY - r.top) + 'px'; $('pmark').style.display = 'block';
+  await pantone();
+  const lab = rgb2lab(R, G, B), near = ptNear(lab, 6);
+  $('ppick').innerHTML = `<div class="row"><span class="c" style="background:rgb(${R},${G},${B})"></span>사진에서 고른 색<small>L ${lab[0]} a ${lab[1]} b ${lab[2]}</small></div><div class="dim" style="margin-top:6px">비슷한 팬톤색 (누르면 자세히)</div>`
+    + near.map(y => `<div class="row tap" data-n="${esc(y.name)}"><span class="c" style="background:${lab2rgb(...y.lab)}"></span>PANTONE ${esc(y.name)}<small>ΔE ${y.de.toFixed(2)}<br>${esc(y.deck)}</small></div>`).join('');
+};
+$('ppick').onclick = e => { const t = e.target.closest('.row.tap'); if (!t) return; const x = PT.get(norm(t.dataset.n)); if (x) ptDetail(x); };
+
 
 // ---------------------------------------------------------------- 공용 저장소 (PC 프로그램과 같은 곳, 토큰 없음)
 const FS = 'https://firestore.googleapis.com/v1/projects/serogochim-inventory/databases/(default)/documents';
@@ -307,10 +430,11 @@ async function ownNear(name, lab, box, after){
   const items = palItems(await palettes());
   const old = box.querySelector('.near'); if (old) old.remove();
   const d = document.createElement('div'); d.className = 'near'; d.style.cssText = 'padding:6px 0 10px 42px';
-  if (!items.length){ d.innerHTML = '<div class="dim">내 팔레트가 비어 있어 우리 물건을 찾을 수 없습니다</div>'; }
+  await pantone().catch(() => null);
+  if (!items.length){ d.innerHTML = ptNearHtml(lab) + '<div class="dim">내 팔레트가 비어 있어 우리 물건을 찾을 수 없습니다</div>'; }
   else {
     const near = items.map(x => ({...x, de: de2000(...lab, ...x.lab)})).sort((a,b) => a.de - b.de).slice(0, 5);
-    d.innerHTML = '<div class="dim">우리 물건 중 가까운 것</div>' + near.map(x => `<div class="row"><span class="c" style="background:${lab2rgb(...x.lab)}"></span>${esc(x.name)}<small>ΔE ${x.de.toFixed(2)}<br>${esc(x.pal)}</small></div>`).join('');
+    d.innerHTML = ptNearHtml(lab) + '<div class="dim">우리 물건 중 가까운 것</div>' + near.map(x => `<div class="row"><span class="c" style="background:${lab2rgb(...x.lab)}"></span>${esc(x.name)}<small>ΔE ${x.de.toFixed(2)}<br>${esc(x.pal)}</small></div>`).join('');
   }
   after.after(d);
 }
@@ -351,19 +475,24 @@ addEventListener('pagehide', () => { try { fetch(`${FS}/rm200_presence/${PID_}?k
 // PC 프로그램(rm200lib)과 같은 통신: 길이 알림(제어 0x97) → 명령(끝점 2) → 대답(끝점 1).
 // 기계로는 읽기와 측정(7835)만 보냅니다. 설정 바꾸기·지우기·단추 누르기는 이 앱에 없습니다.
 let dev = null, bufsize = 64, busy = false, dirty = false;
-const ALLOWED = new Set(['7811','7819','7835','7823','7828','782e','7720','7722','7721','7714']);
+const ALLOWED = new Set(['7811','7819','7835','7823','7828','782e','7720','7722','7721','7714','7820','7812','7701','7905','970a','7825','7821','7822']);
 // 7720(파일 열기)은 읽기(1)로 측정 기록 파일만, 7714(다시 켜기)는 묻고 나서만 보냅니다. 파일 쓰기·지우기는 없음.
-const MEAS_FILE = 'MeasDataV05.dat';
+const MEAS_FILE = 'MeasDataV05.dat', READ_FILES = ['MeasDataV05.dat', 'Versions.dat'];
+let setOK = false;
 let rebootOK = false;
 const hex = b => Array.from(b, x => x.toString(16).padStart(2,'0')).join('');
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('대답 시간 초과')), ms))]);
 async function drain(){ for (let i = 0; i < 4; i++){ try { await withTimeout(dev.transferIn(1, 4096), 200); } catch(e){ break; } } dirty = false; }
-async function cmd(bytes){
+// 명령은 한 번에 하나씩만(여러 일이 겹쳐 대답이 뒤섞이지 않게)
+let CQ = Promise.resolve();
+function cmd(bytes){ const r = CQ.then(() => cmd0(bytes)); CQ = r.catch(() => {}); return r; }
+async function cmd0(bytes){
   if (!dev) throw new Error('연결 안 됨');
   const data = new Uint8Array(bytes);
   const op = hex(data.slice(0,2));
   if (!ALLOWED.has(op)) throw new Error('막힌 명령');
-  if (op === '7720' && !(data[2] === 1 && String.fromCharCode(...data.slice(3, 3 + MEAS_FILE.length)) === MEAS_FILE && data.length === 4 + MEAS_FILE.length)) throw new Error('막힌 명령');
+  if (op === '7720' && !(data[2] === 1 && READ_FILES.includes(String.fromCharCode(...data.slice(3, data.length - 1))) && data[data.length - 1] === 0)) throw new Error('막힌 명령');
+  if (op === '7822'){ if (!setOK) throw new Error('막힌 명령'); setOK = false; }
   if (op === '7714'){ if (!rebootOK) throw new Error('막힌 명령'); rebootOK = false; }
   if (dirty) await drain();
   const n = data.length;
@@ -372,8 +501,12 @@ async function cmd(bytes){
   let r;
   try { r = await withTimeout(dev.transferIn(1, Math.max(bufsize, 64) + 64), 5000); } catch(e){ dirty = true; throw e; }
   const b = new Uint8Array(r.data.buffer, r.data.byteOffset, r.data.byteLength);
+  lastRaw = b;
+  if (op !== '7722') dbg(`${op} → ${b.length}B ${hex(b.slice(0, 40))}`);
   return (b.length >= 4 && b[2] === 0x33 && b[3] === 0x01) ? b.slice(4) : null;
 }
+const DBG = []; let lastRaw = null;
+function dbg(t){ const d = new Date(); DBG.push(d.toTimeString().slice(0, 8) + ' ' + t); if (DBG.length > 60) DBG.shift(); const e = document.getElementById('dbg'); if (e) e.textContent = DBG.join('\n'); }
 const u16 = b => b && b.length >= 2 ? (b[0]<<8)|b[1] : null;
 const u32 = b => b && b.length >= 4 ? b[0]*16777216 + (b[1]<<16) + (b[2]<<8) + b[3] : null;
 async function openDev(d){
@@ -409,7 +542,7 @@ async function watchCal(){
   } catch(e){}
   calTimer = setTimeout(watchCal, 2000);
 }
-async function connected(){ $('bulk').style.display = 'block'; led('ok', '연결됨'); $('go').textContent = '측정'; say('연결했습니다. 기계를 잴 곳에 대고 [측정]을 누르십시오.'); watchCal(); }
+async function connected(){ lastCount = null; idleTick(); $('bulk').style.display = 'block'; led('ok', '연결됨'); $('go').textContent = '측정'; say('연결했습니다. 기계를 잴 곳에 대고 [측정]을 누르십시오.'); watchCal(); }
 async function measure(){
   if (busy) return;
   busy = true; $('go').disabled = true; led('work', '재는 중');
@@ -424,14 +557,179 @@ async function measure(){
     for (let i = 0; i < 25 && !got; i++){ const n = u16(await cmd([0x78,0x19])); if (n !== null && n > before) got = true; else await sleep(1000); }
     if (!got){ say('기계가 측정하지 않았습니다. 기계 화면을 확인하십시오.', true); return; }
     await sleep(600);
-    const list = parseMulti(await cmd([0x78,0x23]));
-    if (!list.length){ say('기계가 고른 팬톤 색을 받지 못했습니다. 다시 재 보십시오.', true); return; }
-    await show(list);
-    say('다 쟀습니다. 다시 재려면 [측정]을 누르십시오.');
+    lastCount = null;
+    await afterMeasured();
   } catch(e){
     say('기계와 주고받지 못했습니다: ' + e.message + ' (선을 다시 꽂고 [기계 연결])', true); led('err', '오류');
   } finally { busy = false; $('go').disabled = false; if (dev) watchCal(); }
 }
+// ---- Ver 0.4: 잰 뒤 결과 받기. 기계가 고른 색(7823)이 비면 기계에 저장된 기록(7820)에서 읽음(둘 다 읽기만) ----
+function parseRecord(b){
+  // rm200lib GetRecordData: 00 01, 년(2) 월 일 시 분 초, 6바이트, 글자 10개(견본책·색 번호·쪽·줄·칸·색 이름·?·쪽 번호·?·?)
+  if (!b || b.length < 20) return null;
+  const when = `${(b[2]<<8)|b[3]}-${String(b[4]).padStart(2,'0')}-${String(b[5]).padStart(2,'0')} ${String(b[6]).padStart(2,'0')}:${String(b[7]).padStart(2,'0')}:${String(b[8]).padStart(2,'0')}`;
+  let pos = 15; const f = [];
+  for (let i = 0; i < 10 && pos < b.length; i++){ const [s, p] = utf16z(b, pos); f.push(s); pos = p; }
+  return {when, deck: f[0] || '', code: f[1] || '', page: f[2] || '', cname: f[5] || ''};
+}
+async function readRecord(i){ try { return parseRecord(await cmd([0x78,0x20,(i>>8)&255,i&255])); } catch(e){ dbg('7820 ' + i + ' 오류 ' + e.message); return null; } }
+async function newestRecord(){
+  const n = u16(await cmd([0x78,0x19])); if (!n) return null;
+  const a = await readRecord(n - 1), b = n > 1 ? await readRecord(0) : null;
+  const ok = r => r && r.code && /^\d{4}-/.test(r.when);
+  if (ok(a) && ok(b)) return a.when >= b.when ? a : b;
+  return ok(a) ? a : ok(b) ? b : null;
+}
+let lastCount = null;
+async function afterMeasured(fromButton){
+  let list = [];
+  for (let i = 0; i < 3 && !list.length; i++){ if (i) await sleep(800); list = parseMulti(await cmd([0x78,0x23])); }
+  if (!list.length){
+    const r = await newestRecord();
+    if (r) list = [{deck: r.deck, name: (r.code + ' ' + r.cname).trim(), page: r.page}];
+  }
+  lastCount = u16(await cmd([0x78,0x19]));
+  if (!list.length){ say('기계가 고른 팬톤 색을 받지 못했습니다. 아래 [기계 대답 기록]을 눌러 사진을 보내 주십시오.', true); return; }
+  await show(list);
+  say(fromButton ? '기계 단추로 잰 색을 받았습니다.' : '다 쟀습니다. 다시 재려면 [측정]을 누르십시오.');
+}
+// 기계 빨간 단추로 재도 알아채기: 3초마다 기억 수만 읽음
+let idleT = null;
+async function idleTick(){
+  clearTimeout(idleT);
+  if (!dev) return;
+  if (!busy && $('cal').style.display !== 'block'){
+    try {
+      const n = u16(await cmd([0x78,0x19]));
+      if (n !== null){
+        if (lastCount !== null && n > lastCount && !busy){
+          busy = true; $('go').classList.remove('flash'); void $('go').offsetWidth; $('go').classList.add('flash');
+          led('work', '기계 단추로 잰 색 받는 중'); say('기계에서 잰 색을 받는 중...');
+          try { await sleep(600); await afterMeasured(true); } finally { busy = false; led('ok', '연결됨'); }
+        } else lastCount = n;
+      }
+    } catch(e){}
+  }
+  idleT = setTimeout(idleTick, 3000);
+}
+
+// ---- Ver 0.5: 기계가 쓰는 견본책 이름("Solid C", "FHI Cotton", "CMYK U") → 팬톤 자료의 견본책 ----
+function deckNorm(s){ return String(s || '').toLowerCase().replace(/^pantone\s*/, '').replace(/uncoated/g, 'u').replace(/coated/g, 'c').replace(/[_\s.\-]/g, ''); }
+let DKMAP = null;
+function deckOf(devDeck){
+  if (!PTL || !devDeck) return null;
+  if (!DKMAP){ DKMAP = new Map(); for (const x of PTL) if (x.deckN && !DKMAP.has(deckNorm(x.deckN))) DKMAP.set(deckNorm(x.deckN), x.deck); }
+  return DKMAP.get(deckNorm(devDeck)) || null;
+}
+// 잰 색 하나 자세히: 같은 견본책·모든 견본책에서 비슷한 팬톤, 우리 물건
+async function measDetail(r){
+  await pantone().catch(() => null);
+  const dk = deckOf(r.deck), same = dk ? ptNear(r.lab, 5, dk) : [], all = ptNear(r.lab, 5);
+  const items = palItems(await palettes());
+  const own = items.map(y => ({...y, de: de2000(...r.lab, ...y.lab)})).sort((a, b) => a.de - b.de).slice(0, 5);
+  const row = y => `<div class="row tap" data-n="${esc(y.name)}"><span class="c" style="background:${lab2rgb(...y.lab)}"></span>PANTONE ${esc(y.name)}<small>ΔE ${y.de.toFixed(2)}<br>${esc(y.deck)}</small></div>`;
+  $('pdet').innerHTML = `<div class="sw" style="height:110px;background:${lab2rgb(...r.lab)}"></div><div class="code" style="font-size:21px">잰 색 ${esc(r.when ? r.when.slice(5, 16) : '')}</div><div class="dim">${esc(r.deck || '')} · L ${r.lab[0]} a ${r.lab[1]} b ${r.lab[2]}</div>`
+    + (same.length ? `<h4 style="margin-top:12px">같은 견본책(${esc(dk)})에서 비슷한 팬톤색</h4>` + same.map(row).join('') : '')
+    + '<h4 style="margin-top:12px">모든 견본책에서 비슷한 팬톤색</h4>' + all.map(row).join('')
+    + (own.length ? '<h4 style="margin-top:12px">우리 물건 중 가까운 것</h4>' + own.map(y => `<div class="row"><span class="c" style="background:${lab2rgb(...y.lab)}"></span>${esc(y.name)}<small>ΔE ${y.de.toFixed(2)}<br>${esc(y.pal)}</small></div>`).join('') : '')
+    + '<div class="note" style="margin-top:6px">팬톤색을 누르면 [팬톤 색] 칸의 견본책에서 그 색을 보여 줍니다.</div><button class="sub" id="pdetx">닫기</button>';
+  $('pdet').classList.remove('hidden');
+  $('pdetx').onclick = () => $('pdet').classList.add('hidden');
+  $('pdet').querySelectorAll('.row.tap').forEach(e => e.onclick = () => openInDeck(e.dataset.n));
+}
+// 팬톤색 보기에서 그 색 찾아 보이기
+async function openInDeck(name){
+  const x = PT.get(norm(name)); if (!x) return;
+  $('pdet').classList.add('hidden');
+  document.querySelector('nav button[data-t=find]').click();
+  await deckInit();
+  const di = PDK.findIndex(([k]) => k === x.deck); if (di < 0) return;
+  $('pdeck').value = String(di); deckDraw(false);
+  const L = PDK[di][1], at = L.findIndex(y => y.name === x.name);
+  while (PSHOW <= at) deckDraw(true);
+  const t = [...$('pgrid').children].find(e => e.dataset.n === x.name);
+  if (t){ t.style.outline = '4px solid #e53935'; t.scrollIntoView({block: 'center'}); }
+  ptDetail(x);
+}
+// ---- 기계 칸 ----
+function devNeed(){ if (!dev){ toast('먼저 [측정] 칸에서 기계를 연결하십시오'); return false; } if (busy){ toast('기계가 다른 일을 하는 중입니다. 잠시 뒤에 누르십시오'); return false; } return true; }
+const cstr = b => { let s = ''; for (const c of (b || [])){ if (!c) break; s += String.fromCharCode(c); } return s.trim(); };
+$('dinfo').onclick = async () => {
+  if (!devNeed()) return; busy = true;
+  const o = [];
+  try {
+    try { await cmd([0x78,0x12]); const b = lastRaw; if (b && b.length > 8 && b[2] === 0x33){ const f = new TextDecoder().decode(b.slice(8, b.length - 1)).split('\0');
+      o.push(['일련번호', f[0]], ['만든 날', f[1]], ['하드웨어', f[2]]); if (f[3]) o.push(['저장 공간', `${Math.round(+f[4]/1024)} KB 씀 / 전체 ${Math.round(+f[3]/1024)} KB (남음 ${Math.round(+f[5]/1024)} KB)`]); } } catch(e){}
+    try { o.push(['펌웨어', cstr(await cmd([0x77,0x01]))]); } catch(e){}
+    try { const b = await cmd([0x79,0x05]); if (b && b.length >= 6) o.push(['배터리', `${b[0]}%` + ` · ${new DataView(b.buffer, b.byteOffset + 1, 4).getFloat32(0, false).toFixed(2)} V` + (b[5] ? ' · 충전 중' : '')]); } catch(e){}
+    try { const b = await cmd([0x97,0x0a]); if (b && b.length >= 7){ const p2 = v => String(v).padStart(2, '0'); o.push(['기계 시각', `${(b[0]<<8)|b[1]}-${p2(b[2])}-${p2(b[3])} ${p2(b[4])}:${p2(b[5])}:${p2(b[6])}`]); } } catch(e){}
+    try { const b = await cmd([0x78,0x25]); if (b && b.length) o.push(['조리개', ['작게', '중간', '크게·자동'][b[0]] || String(b[0])]); } catch(e){}
+    try { const c = await calib(); o.push(['교정(0점)', c.ok ? `됨 · ${Math.floor(c.left/60)}분 남음` : '필요함']); } catch(e){}
+    try { o.push(['저장된 측정', (u16(await cmd([0x78,0x19])) || 0) + '개']); } catch(e){}
+  } finally { busy = false; }
+  $('dinfo_o').innerHTML = o.length ? o.map(([k, v]) => `<b>${esc(k)}</b><span>${esc(v)}</span>`).join('') : '<span class="dim">읽지 못했습니다</span>';
+};
+function parseFandecks(b){
+  // rm200lib GetFandecks: 00 01, 개수 2, [이름, 상태 1바이트(0 끔 1 켬 2 먼저), 글자 7개, 4바이트]...
+  const out = []; if (!b) return out; let pos = 4;
+  while (pos < b.length){ const f = []; let st = 0;
+    for (let i = 0; i < 8; i++){ const [s, p] = utf16z(b, pos); f.push(s); pos = p; if (i === 0){ st = b[pos]; pos += 1; } }
+    pos += 4; if (f[0]) out.push({name: f[0], st, f}); }
+  return out;
+}
+let FDS = [];
+async function fdRead(){
+  FDS = parseFandecks(await cmd([0x78,0x21]));
+  $('dfd_o').innerHTML = FDS.length ? FDS.map((d, i) => `<div class="fd${d.st ? ' on' : ''}" data-i="${i}"><i></i><span>${esc(d.name)}</span><small class="dim" style="margin-left:auto">${d.st === 2 ? '먼저 찾음' : d.st ? '켜짐' : '꺼짐'}</small></div>`).join('') : '<div class="dim">팬덱 목록을 받지 못했습니다</div>';
+}
+$('dfd').onclick = async () => { if (!devNeed()) return; busy = true; try { await fdRead(); } catch(e){ $('dfd_o').innerHTML = '<div class="dim">읽지 못했습니다: ' + esc(e.message) + '</div>'; } finally { busy = false; } };
+$('dfd_o').onclick = async e => {
+  const r = e.target.closest('.fd'); if (!r || !devNeed()) return;
+  const d = FDS[+r.dataset.i], to = d.st ? 0 : 1;
+  if (!confirm(`기계의 "${d.name}" 견본책을 ${to ? '켤' : '끌'}까요?`)) return;
+  busy = true;
+  try {
+    const c = await calib();
+    if (!c.ok){ toast('기계가 0점 맞추기 화면에 있을 때는 설정을 바꾸지 않습니다. 먼저 0점을 맞추십시오'); return; }
+    const nm = []; for (const ch of d.name){ const v = ch.charCodeAt(0); nm.push(v & 255, v >> 8); }
+    setOK = true; const ok = await cmd([0x78,0x22, ...nm, 0, 0, to]); setOK = false;
+    toast(ok ? `${d.name}: ${to ? '켰습니다' : '껐습니다'}` : '기계가 바꾸지 않았습니다');
+    await fdRead();
+  } catch(e){ setOK = false; toast('바꾸지 못했습니다: ' + e.message); } finally { busy = false; }
+};
+function parseVersions(b){
+  // rm200lib ReadVersionsDotDat: [길이 4][종류 2][글자 5개(2바이트 길이+UTF-8)][크기 4][글자 1개]...
+  const out = []; let pos = 0; const dv = new DataView(b.buffer, b.byteOffset, b.byteLength); const td = new TextDecoder();
+  try {
+    while (pos + 6 < b.length){ pos += 4; const f = [];
+      for (let i = 0; i < 8; i++){
+        if (i === 0){ f.push(dv.getUint16(pos, true)); pos += 2; }
+        else if (i === 6){ f.push(dv.getUint32(pos, true)); pos += 4; }
+        else { const n = dv.getUint16(pos, true); pos += 2; f.push(td.decode(b.slice(pos, pos + n))); pos += n; }
+      }
+      out.push(f); }
+  } catch(e){}
+  return out;
+}
+const vkey = v => String(v || '').split('.').map(x => parseInt(x, 10) || 0);
+const vgt = (a, b) => { const A = vkey(a), B = vkey(b); for (let i = 0; i < Math.max(A.length, B.length); i++){ if ((A[i]||0) !== (B[i]||0)) return (A[i]||0) > (B[i]||0); } return false; };
+$('dver').onclick = async () => {
+  if (!devNeed()) return; busy = true; $('dver_o').innerHTML = '<div class="dim">기계 판 목록을 읽는 중...</div>';
+  let vers = [];
+  try { vers = parseVersions(await fetchMeas('Versions.dat')); } catch(e){ $('dver_o').innerHTML = '<div class="dim">기계 판 목록을 읽지 못했습니다: ' + esc(e.message) + '</div>'; return; } finally { busy = false; }
+  let srv = null; try { [srv] = await getDoc('rm200/xrite_latest'); } catch(e){}
+  const S = (srv && srv.decks) || {};
+  const rows = vers.filter(f => String(f[2] || f[1]).toUpperCase().includes('PANTONE') || S[f[1]]);
+  const list = (rows.length ? rows : vers).map(f => {
+    const sku = f[1], name = f[2] || sku, dv = f[5], sv = S[sku] && S[sku].ver;
+    const st = !sv ? '<span class="dim">서버 판 모름</span>' : vgt(sv, dv) ? `<b style="color:#c62828">새 판 ${esc(sv)} 있음</b>` : '<span style="color:#2e7d32">최신</span>';
+    return `<div class="row"><div>${esc(name)}<div class="dim">기계 판 ${esc(dv)}</div></div><small>${st}</small></div>`; });
+  const nNew = (rows.length ? rows : vers).filter(f => S[f[1]] && vgt(S[f[1]].ver, f[5])).length;
+  $('dver_o').innerHTML = (srv ? `<div class="msg">${nNew ? `새 판이 ${nNew}개 있습니다. PC 프로그램에서 넣으십시오.` : '기계 안 팬덱은 모두 최신입니다.'} <span class="dim">(서버 확인: ${esc(srv.checked || '')} · ${esc(srv.by || '')})</span></div>`
+    : '<div class="msg">아직 서버 판 정보가 없습니다. PC 프로그램(Ver0.44 이상)에서 [팬덱 새 판 확인]을 한 번 누르면 여기서도 비교됩니다.</div>') + list.join('');
+};
+document.querySelector('nav button[data-t=dev]').addEventListener('click', () => { $('devoff').classList.toggle('hidden', !!dev); });
+
 async function show(list){
   await pantone().catch(() => null);
   const top = list[0]; const hit = findPT(top.name);
@@ -481,8 +779,8 @@ if ('usb' in navigator){
 // ---------------------------------------------------------------- 출장에서 잰 색 한꺼번에 (Ver 0.2)
 // PC 프로그램과 같은 기록 파일 해석: 한 기록 0x5158 바이트, 날짜 0x08, 이름 0xA4(UTF-16), 견본책 0xE0, Lab 0x1DC(float)
 const RS = 0x5158;
-async function fetchMeas(){
-  const name = Array.from(MEAS_FILE, c => c.charCodeAt(0));
+async function fetchMeas(fname){
+  const name = Array.from(fname || MEAS_FILE, c => c.charCodeAt(0));
   if (!(await cmd([0x77,0x20,1, ...name, 0]))) throw new Error('기록 파일을 열지 못했습니다');
   const parts = []; let total = 0;
   try {
@@ -523,11 +821,16 @@ function markDone(keys){ const s = doneKeys(); keys.forEach(k => s.add(k)); try 
 let BR = [], BON = new Set();
 function today(){ const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`; }
 function bdraw(){
-  $('blist').innerHTML = BR.map((r, i) => `<div class="row tap" data-i="${i}" style="${r.old ? 'opacity:.55' : ''}"><input type="checkbox" ${BON.has(i) ? 'checked' : ''} style="width:22px;height:22px;flex:none;pointer-events:none"><span class="c" style="background:${lab2rgb(...r.lab)}"></span><div>${esc(r.name || (r.pt ? r.pt.name : '측정'))}<div class="dim">${esc(r.when.slice(5,16))} · L ${r.lab[0]} a ${r.lab[1]} b ${r.lab[2]}</div></div><small>${r.pt ? esc(r.pt.name) + '<br>ΔE ' + r.pt.de.toFixed(2) : ''}${r.old ? '<br>들여옴' : ''}</small></div>`).join('');
+  $('bsel').classList.toggle('hidden', !BR.length); $('btip').classList.toggle('hidden', !BR.length);
+  $('bcnt').textContent = `${BON.size} / ${BR.length}개`;
+  $('blist').innerHTML = BR.map((r, i) => `<div class="row tap" data-i="${i}" style="${r.old ? 'opacity:.55' : ''}"><span class="ck" style="padding:8px 6px 8px 0"><input type="checkbox" ${BON.has(i) ? 'checked' : ''} style="width:24px;height:24px;flex:none;pointer-events:none;display:block"></span><span class="c" style="background:${lab2rgb(...r.lab)}"></span><div>${esc(r.name || (r.pt ? r.pt.name : '측정'))}<div class="dim">${esc(r.when.slice(5,16))} · L ${r.lab[0]} a ${r.lab[1]} b ${r.lab[2]}</div></div><small>${r.pt ? esc(r.pt.name) + '<br>ΔE ' + r.pt.de.toFixed(2) : ''}${r.old ? '<br>들여옴' : ''}</small></div>`).join('');
   $('bput').classList.toggle('hidden', !BR.length);
   $('bgo').textContent = `고른 색 ${BON.size}개 내 팔레트에 넣기`;
 }
-$('blist').onclick = e => { const r = e.target.closest('.row'); if (!r) return; const i = +r.dataset.i; BON.has(i) ? BON.delete(i) : BON.add(i); bdraw(); };
+$('blist').onclick = e => { const r = e.target.closest('.row'); if (!r) return; const i = +r.dataset.i;
+  if (e.target.closest('.ck')){ BON.has(i) ? BON.delete(i) : BON.add(i); bdraw(); return; }
+  measDetail(BR[i]); };
+$('ball').onclick = () => { BON = new Set(BR.map((r, i) => i)); bdraw(); };
 $('bnew').onclick = () => { BON = new Set(BR.map((r, i) => r.old ? -1 : i).filter(i => i >= 0)); bdraw(); };
 $('bnone').onclick = () => { BON = new Set(); bdraw(); };
 async function waitBack(ms){ const t0 = Date.now(); while (Date.now() - t0 < ms){ await sleep(500); if (dev && dev.opened !== false && !busy) return true; } return false; }
@@ -547,7 +850,7 @@ async function bulkRead(reboot){
     const recs = parseMeas(await fetchMeas());
     await pantone().catch(() => null);
     const done = doneKeys();
-    BR = recs.map(r => ({...r, pt: nearestPT(r.lab), old: done.has(bkey(r))}));
+    BR = recs.map(r => ({...r, pt: ptNear(r.lab, 1, deckOf(r.deck))[0] || nearestPT(r.lab), old: done.has(bkey(r))}));
     BON = new Set(BR.map((r, i) => r.old ? -1 : i).filter(i => i >= 0));
     if (!$('bpal').value) $('bpal').value = `출장 측정/${today()}`;
     $('bmsg').textContent = BR.length ? `기계 기록 ${BR.length}개 (새 것 ${BON.size}개). 넣을 것을 고르십시오.` : '기계에 측정 기록이 없습니다. 방금 쟀다면 [다시 켜고 읽기]를 누르십시오.';
