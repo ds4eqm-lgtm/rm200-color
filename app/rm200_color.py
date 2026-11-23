@@ -871,7 +871,7 @@ class AdvisorApp(tk.Tk):
             activebackground='#c25700', activeforeground='white', cursor='hand2')
         self._devtime_var = tk.StringVar(value="기계 시각: -")
         self._devtime_lbl = tk.Label(bar, textvariable=self._devtime_var, bg='#f4f6fa', fg='#333',
-                                     font=('맑은 고딕', 10, 'bold'), width=42, anchor='e')
+                                     font=('맑은 고딕', 10, 'bold'), width=48, anchor='e')
         self._devtime_lbl.pack(side=tk.LEFT)   # Ver 0.27: 글자를 오른쪽에 붙여 [맞음] 단추와 딱 붙게
         # Ver 0.10: 동기화 단추는 기계 시각 바로 옆, 맞으면 꺼짐("맞음"), 틀리면 켜짐
         self._sync_btn = tk.Button(bar, text="확인 중", command=self._on_sync_time,
@@ -2143,7 +2143,8 @@ class AdvisorApp(tk.Tk):
                 lcd = look()
                 if lcd:
                     keep(lcd, "0_다시켠뒤")
-                for i in range(2):
+                # Ver 0.30: 기계 "눈금 조정" 화면은 위쪽 빨간 측정 단추(키 8)를 기다림
+                for i, how in enumerate(('key8', 'key8', 'trigger')):
                     if not C.get('alive'):
                         break
                     if lcd and lcd_has_alert(lcd):
@@ -2151,9 +2152,18 @@ class AdvisorApp(tk.Tk):
                         C['why'] = 'alert'
                         break
                     say(f"교정판을 재는 중입니다 ({i + 1}번째)...")
-                    log(f"  옆 측정 단추(7835) {i + 1}번째")
-                    with rm.LOCK:
-                        rm.TriggerMeasurement(self.aperture)
+                    if how == 'key8':
+                        log(f"  위 빨간 측정 단추(780f 키 8) {i + 1}번째")
+                        with rm.LOCK:
+                            rm.REMOTE_KEYS = True
+                            try:
+                                rm.PressKey(8)
+                            finally:
+                                rm.REMOTE_KEYS = False
+                    else:
+                        log(f"  측정 명령(7835) {i + 1}번째")
+                        with rm.LOCK:
+                            rm.TriggerMeasurement(self.aperture)
                     t0 = time.time()
                     n = 0
                     while time.time() - t0 < 15 and C.get('alive'):
@@ -2239,15 +2249,21 @@ class AdvisorApp(tk.Tk):
             P['btns'].append(b)
         kb("▲\n위", 2, 0, 1); kb("◀\n왼쪽", 4, 1, 0); kb("●\n가운데", 1, 1, 1, big=True)
         kb("▶\n오른쪽", 5, 1, 2); kb("▼\n아래", 3, 2, 1)
-        mb = tk.Button(pad, text="옆 측정 단추\n(측정·교정 찍기)", command=lambda: self._remote_measure(P),
+        rb = tk.Button(pad, text="● 위 빨간 측정 단추 (눈금 조정·측정)", command=lambda: self._remote_press(P, 8),
+                       relief=tk.RAISED, font=('맑은 고딕', 11, 'bold'), bg='#c62828', fg='white',
+                       activebackground='#9e1f1f', activeforeground='white', cursor='hand2',
+                       state=tk.DISABLED, height=2)
+        rb.grid(row=3, column=0, columnspan=3, sticky='we', padx=4, pady=(14, 4))
+        P['btns'].append(rb)
+        mb = tk.Button(pad, text="측정 명령 보내기\n(처음 화면에서 측정)", command=lambda: self._remote_measure(P),
                        relief=tk.RAISED, font=('맑은 고딕', 11, 'bold'), bg='#e65100', fg='white',
                        activebackground='#bf4300', activeforeground='white', cursor='hand2',
                        state=tk.DISABLED, height=2)
-        mb.grid(row=3, column=0, columnspan=3, sticky='we', padx=4, pady=(16, 4))
+        mb.grid(row=6, column=0, columnspan=3, sticky='we', padx=4, pady=(4, 4))
         P['btns'].append(mb)
         P['state'] = tk.StringVar(value="기계 화면이 보이면 단추가 켜집니다")
         tk.Label(pad, textvariable=P['state'], bg='#ffffff', fg='#555', wraplength=230,
-                 justify=tk.LEFT, font=('맑은 고딕', 9)).grid(row=4, column=0, columnspan=3, pady=(8, 0))
+                 justify=tk.LEFT, font=('맑은 고딕', 9)).grid(row=7, column=0, columnspan=3, pady=(8, 0))
         return P
 
     def _open_remote(self, calib=False):
@@ -2314,6 +2330,26 @@ class AdvisorApp(tk.Tk):
         if tp and self._rm_tab_visible():
             panels.append(tp)
         rm.REMOTE_KEYS = bool(self.connected and any(self._rm_panel_fresh(P) for P in panels if P))
+
+    def _on_tab_changed(self):
+        """Ver 0.31: 팬덱 칸은 열면 저절로 목록을, 실시간 화면은 열면 켜고 떠나면 끔."""
+        try:
+            cur = self._notebook.tab(self._notebook.select(), 'text')
+        except Exception:
+            return
+        if cur.startswith('팬덱') and self.connected and not getattr(self, '_fd_loaded', False) \
+                and not self.busy:
+            self._fd_loaded = True
+            try:
+                self._on_fd_refresh()
+            except Exception:
+                self._fd_loaded = False
+        if cur == '실시간 화면':
+            if self.connected and not self.preview_running and not self.busy:
+                self._pv_n = 0; self._pv_t0 = None
+                self._start_live_preview()
+        elif self.preview_running:
+            self._stop_live_preview()
 
     def _rm_tab_first_read(self):
         if self._rm_tab_visible() and not getattr(self, '_devmenu_auto', True) and self.connected:
@@ -2386,7 +2422,7 @@ class AdvisorApp(tk.Tk):
         self._rm_keys_update()
         if not rm.REMOTE_KEYS or self.busy or not self._rm_panel_fresh(P):
             return
-        names = {1: '가운데', 2: '위', 3: '아래', 4: '왼쪽', 5: '오른쪽'}
+        names = {1: '가운데', 2: '위', 3: '아래', 4: '왼쪽', 5: '오른쪽', 8: '빨간 측정'}
 
         def worker():
             err = None
@@ -2609,6 +2645,7 @@ class AdvisorApp(tk.Tk):
             lb.bind('<Leave>', lambda e, w=lb: self._tab_hover(w, False))
             self._tab_btns.append((tid, lb))
         nb.bind('<<NotebookTabChanged>>', lambda e: self._paint_tabs(), add='+')
+        nb.bind('<<NotebookTabChanged>>', lambda e: self.after(50, self._on_tab_changed), add='+')
         self._paint_tabs()
 
     def _paint_tabs(self):
@@ -3959,7 +3996,7 @@ class AdvisorApp(tk.Tk):
         self.fd_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        self.fd_status = tk.StringVar(value="[목록 새로 고침]을 누르십시오.")
+        self.fd_status = tk.StringVar(value="기계에 연결되어 있으면 이 칸을 열 때 저절로 목록을 읽습니다.")
         ttk.Label(frame, textvariable=self.fd_status,
                   padding=(0, 6, 0, 0)).pack(anchor=tk.W)
 
@@ -3979,15 +4016,29 @@ class AdvisorApp(tk.Tk):
         if not ok:
             self.fd_status.set(f"오류: {val}")
             return
-        items = val if isinstance(val, (list, tuple)) else [val]
+        items = val if isinstance(val, (list, tuple)) else ([] if val is None else [val])
+        self._fd_names = []
+        on = 0
         for it in items:
-            self.fd_list.insert(tk.END, str(it))
-        self.fd_status.set(f"Fan decks: {len(items)}")
+            if isinstance(it, (list, tuple)) and it:
+                name = str(it[0]); st = it[1] if len(it) > 1 else None
+                mark = {1: '● 켜짐', 2: '★ 먼저'}.get(st, '○ 꺼짐')
+                on += 1 if st in (1, 2) else 0
+                self.fd_list.insert(tk.END, f"  {mark}     {name}")
+            else:
+                name = str(it)
+                self.fd_list.insert(tk.END, f"  {name}")
+            self._fd_names.append(name)
+        self.fd_status.set(f"기계 안 팬덱 {len(items)}개, 켜진 것 {on}개 (열 때 저절로 읽음, 고른 뒤 켜기·끄기)"
+                           if items else "기계에서 팬덱 목록을 받지 못했습니다. [목록 새로 고침]을 눌러 보십시오.")
 
     def _selected_fd(self):
         sel = self.fd_list.curselection()
         if not sel:
             return None
+        names = getattr(self, '_fd_names', [])
+        if sel[0] < len(names):
+            return names[sel[0]]
         return self.fd_list.get(sel[0]).strip().split()[-1]
 
     def _on_fd_activate(self):
@@ -4741,17 +4792,29 @@ class AdvisorApp(tk.Tk):
         ttk.Button(ctrl, text="실시간 화면 사진 저장...",
                    command=self._preview_save).pack(side=tk.LEFT, padx=4)
 
-        ttk.Label(ctrl, text="새로 고침 간격(ms):").pack(side=tk.LEFT, padx=(20, 4))
-        self.preview_interval_var = tk.StringVar(value="500")
-        ttk.Entry(ctrl, textvariable=self.preview_interval_var,
-                  width=6).pack(side=tk.LEFT)
+        self.preview_interval_var = tk.StringVar(value="350")
+        self.preview_fps = tk.StringVar(value="")
+        ttk.Label(ctrl, textvariable=self.preview_fps).pack(side=tk.LEFT, padx=(16, 0))
+        tk.Label(ctrl, text="이 칸을 열면 저절로 켜지고, 다른 칸으로 가면 저절로 꺼집니다(기계 화면도 원래대로).",
+                 fg='#555', font=('맑은 고딕', 9)).pack(side=tk.LEFT, padx=(16, 0))
 
-        preview_frame = ttk.LabelFrame(frame, text="Preview")
+        preview_frame = ttk.LabelFrame(frame, text="기계 카메라로 보는 자리 (가운데 + 가 측정되는 곳)")
         preview_frame.pack(fill=tk.BOTH, expand=True)
-
-        self.preview_canvas = tk.Canvas(preview_frame, width=640, height=480,
-                                        bg='black')
-        self.preview_canvas.pack(padx=4, pady=4)
+        body = tk.Frame(preview_frame); body.pack(fill=tk.BOTH, expand=True)
+        self.preview_canvas = tk.Canvas(body, width=640, height=480, bg='black')
+        self.preview_canvas.pack(side=tk.LEFT, padx=4, pady=4)
+        side = tk.Frame(body); side.pack(side=tk.LEFT, fill=tk.Y, padx=(10, 4), pady=4)
+        tk.Label(side, text="+ 자리 색 (카메라로 본 대략의 색)", font=('맑은 고딕', 11, 'bold'),
+                 fg='#1e3a5f').pack(anchor='w')
+        self.preview_chip = tk.Canvas(side, width=220, height=120, bg='#ddd', highlightthickness=1,
+                                      highlightbackground='#888')
+        self.preview_chip.pack(anchor='w', pady=(6, 6))
+        self.preview_info = tk.StringVar(value="-")
+        tk.Label(side, textvariable=self.preview_info, justify=tk.LEFT, wraplength=260,
+                 font=('맑은 고딕', 10)).pack(anchor='w')
+        tk.Label(side, text="카메라 색은 조명·화면 때문에 대략입니다.\n정확한 색은 [측정·비교]에서 측정하십시오.\n"
+                            "+ 를 재려는 자리에 맞춘 뒤 측정하면 됩니다.",
+                 justify=tk.LEFT, fg='#777', font=('맑은 고딕', 9)).pack(anchor='w', pady=(10, 0))
         self.preview_canvas.create_text(320, 240, text="실시간 화면이 꺼져 있습니다",
                                         fill="#666", font=("Segoe UI", 12))
 
@@ -4812,55 +4875,83 @@ class AdvisorApp(tk.Tk):
         self._preview_print("실시간 화면을 멈췄습니다.")
 
     def _preview_tick(self):
+        """Ver 0.31: 받기는 뒤에서(화면이 멈추지 않게), 그리기와 + 자리 색은 여기서."""
         if not self.preview_running:
             return
+        if getattr(self, '_pv_busy', False):
+            self.preview_after_id = self.after(100, self._preview_tick)
+            return
+        self._pv_busy = True
 
+        def worker():
+            fn = getattr(rm, "GetPreview", None)
+            ok, data = try_call(fn)
+            self.after(0, lambda: self._preview_draw(ok, data))
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _preview_draw(self, ok, data):
+        self._pv_busy = False
         try:
-            interval = max(100, int(self.preview_interval_var.get()))
+            interval = max(150, int(self.preview_interval_var.get()))
         except Exception:
-            interval = 500
-
-        fn = getattr(rm, "GetPreview", None)
-        ok, data = try_call(fn)
-
+            interval = 350
         if ok and data and len(data) > 4:
             try:
                 width = int.from_bytes(data[0:2], 'big')
                 height = int.from_bytes(data[2:4], 'big')
-                pixels = data[4:]
-
-                img = Image.new("RGB", (width, height))
+                pixels = bytes(data[4:])
                 expected = width * height * 2
-                if len(pixels) < expected:
-                    self._preview_print(
-                        f"화면 점이 모자랍니다: {len(pixels)} < {expected}")
-                    self.preview_after_id = self.after(interval, self._preview_tick)
-                    return
-
-                pix_data = []
-                for i in range(0, expected, 2):
-                    v = int.from_bytes(pixels[i:i+2], 'big')
-                    r = (v >> 11) & 0x1F
-                    g = (v >> 5) & 0x3F
-                    b = v & 0x1F
-                    pix_data.append((
-                        (r * 255) // 31,
-                        (g * 255) // 63,
-                        (b * 255) // 31,
-                    ))
-
-                img.putdata(pix_data)
-                img = img.resize((640, 480), Image.NEAREST)
-                photo = ImageTk.PhotoImage(img)
-
-                self.preview_canvas.delete("all")
-                self.preview_canvas.create_image(320, 240, image=photo)
-                self.preview_canvas.image = photo
+                if width and height and len(pixels) >= expected:
+                    raw = bytearray(width * height * 3)
+                    j = 0
+                    for i in range(0, expected, 2):
+                        v = (pixels[i] << 8) | pixels[i + 1]
+                        raw[j] = ((v >> 11) & 31) * 255 // 31
+                        raw[j + 1] = ((v >> 5) & 63) * 255 // 63
+                        raw[j + 2] = (v & 31) * 255 // 31
+                        j += 3
+                    img = Image.frombytes("RGB", (width, height), bytes(raw))
+                    cw, ch = 640, 480
+                    sc = min(cw / width, ch / height)
+                    big = img.resize((max(1, int(width * sc)), max(1, int(height * sc))), Image.NEAREST)
+                    photo = ImageTk.PhotoImage(big)
+                    cv = self.preview_canvas
+                    cv.delete("all")
+                    cv.create_image(cw // 2, ch // 2, image=photo)
+                    cv.image = photo
+                    # 가운데 + 표시와 그 자리 색(가운데 9x9 평균)
+                    cx, cy = cw // 2, ch // 2
+                    for col, wdt in (('black', 5), ('white', 2)):
+                        cv.create_line(cx - 26, cy, cx - 6, cy, fill=col, width=wdt)
+                        cv.create_line(cx + 6, cy, cx + 26, cy, fill=col, width=wdt)
+                        cv.create_line(cx, cy - 26, cx, cy - 6, fill=col, width=wdt)
+                        cv.create_line(cx, cy + 6, cx, cy + 26, fill=col, width=wdt)
+                    mx, my = width // 2, height // 2
+                    box = img.crop((max(0, mx - 4), max(0, my - 4), min(width, mx + 5), min(height, my + 5)))
+                    px = list(box.getdata())
+                    r, g, b = (sum(p[k] for p in px) // len(px) for k in range(3))
+                    self.preview_chip.config(bg='#%02x%02x%02x' % (r, g, b))
+                    txt = f"RGB {r}, {g}, {b}"
+                    try:
+                        L, A, B = srgb_to_lab(r, g, b)
+                        txt += f"\nLab 대략 {L:.0f}, {A:.0f}, {B:.0f}"
+                        hit = self._nearest_pantone(L, A, B)
+                        if hit:
+                            dE, c, d = hit[0]
+                            txt += f"\n가까운 팬톤(대략): {c[0]}\n({d['ko']}, ΔE {dE:.1f})"
+                    except Exception:
+                        pass
+                    self.preview_info.set(txt)
+                    n = getattr(self, '_pv_n', 0) + 1
+                    self._pv_n = n
+                    t0 = getattr(self, '_pv_t0', None) or time.time()
+                    self._pv_t0 = t0
+                    if n % 5 == 0:
+                        self.preview_fps.set(f"1초에 {n / max(0.1, time.time() - t0):.1f}장 · {width}×{height}")
             except Exception as e:
                 self._preview_print(f"그리기 오류: {e}")
         elif not ok:
             self._preview_print(f"GetPreview: {data}")
-
         if self.preview_running:
             self.preview_after_id = self.after(interval, self._preview_tick)
 

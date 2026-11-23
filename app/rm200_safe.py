@@ -58,7 +58,7 @@ def _check(data):
             return
         raise BlockedCommand("기계 안 파일 쓰기는 이 프로그램에서 막혀 있습니다")
     if op == 0x780f:   # Ver 0.19: 기계 단추 대신 누르기(원격 단추 창에서만)
-        if REMOTE_KEYS and len(data) >= 4 and ((data[2] << 8) | data[3]) in (1, 2, 3, 4, 5):
+        if REMOTE_KEYS and len(data) >= 4 and ((data[2] << 8) | data[3]) in (1, 2, 3, 4, 5, 8):
             return
         raise BlockedCommand("기계 단추 누르기는 [기계 원격 단추] 창에서만 됩니다")
     if op in CONFIRM:
@@ -332,8 +332,8 @@ for _n in ("FetchFile", "DownloadFile", "ReadVersionsDotDat", "SaveScreenshot",
 # ---- Ver 0.19: 기계 단추 대신 누르기 (1=가운데 2=위 3=아래 4=왼쪽 5=오른쪽) ----
 def PressKey(key):
     key = int(key)
-    if key not in (1, 2, 3, 4, 5):
-        raise BlockedCommand("가운데·위·아래·왼쪽·오른쪽 단추만 누를 수 있습니다")
+    if key not in (1, 2, 3, 4, 5, 8):   # Ver 0.30: 8 = 위쪽 빨간 측정(캡처) 단추
+        raise BlockedCommand("가운데·위·아래·왼쪽·오른쪽·측정 단추만 누를 수 있습니다")
     return _lib.CommandBool(b"\x78\x0f" + key.to_bytes(2, "big"))
 
 
