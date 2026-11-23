@@ -405,3 +405,39 @@ def ResetUsb():
             pass
         _time.sleep(1.5)
         Connect()
+
+
+# ---- Ver 0.39: 기계가 "눈금 조정(교정)" 화면에 있을 때는 설정 바꾸기를 보내지 않음 ----
+# 실제 기계 기록: 교정 화면에서 시각 맞추기(7904)를 보내자 "[Errno 5] Input/Output Error" 와
+# 기계 화면 "오류 0027 프로토콜 오류"가 남.
+class NeedCalibration(BlockedCommand):
+    pass
+
+
+def calibration_needed():
+    """True = 교정이 필요함(기계가 교정 화면에 있음). 읽지 못하면 None."""
+    try:
+        with LOCK:
+            cs = _lib.GetCalibrationState()
+            left = _lib.GetTimeToCalibExpired()
+    except Exception:
+        return None
+    left_ok = left is not None and 0 < left < 2 ** 31
+    if left_ok:
+        return False
+    return cs == 0 or left is not None
+
+
+def _calib_guard(f, what):
+    def w(*a, **k):
+        if calibration_needed():
+            raise NeedCalibration(f"기계가 교정(0점 맞추기) 화면에 있어 {what}을(를) 받지 않습니다. "
+                                  "0점 맞추기를 먼저 하십시오")
+        return f(*a, **k)
+    w.__name__ = getattr(f, '__name__', what)
+    return w
+
+
+SetTime = _calib_guard(_lib.SetTime, "시각 맞추기")
+SetAperture = _calib_guard(SetAperture, "조리개 바꾸기")
+SetFandeckActive = _calib_guard(SetFandeckActive, "팬덱 켜기·끄기")

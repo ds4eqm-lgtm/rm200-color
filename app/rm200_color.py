@@ -5725,7 +5725,7 @@ class AdvisorApp(tk.Tk):
                         cs0 = safe_command(rm.GetCalibrationState); left0 = safe_command(rm.GetTimeToCalibExpired)
                     except Exception:
                         cs0 = left0 = None
-                    if self._reboot_ok_pref() and cs0 == 1 and left0 is not None and 120 < left0 < 2 ** 31:
+                    if self._reboot_ok_pref():   # Ver 0.39: 교정이 이미 지났어도 다시 켜서 꺼냄(잃을 것이 없음)
                         stage("값 꺼내는 중 (기계를 잠깐 다시 켭니다, 약 10초. 교정은 그대로)")
                         self._meas_log(f"  다시 켜서 꺼내기(교정 {left0}초 남음)")
                         if not self._reboot_device():
@@ -5738,7 +5738,10 @@ class AdvisorApp(tk.Tk):
                         except Exception:
                             cs1 = left1 = None
                         self._meas_log(f"  다시 켠 뒤: 새 것 {len(fresh)}개, 교정 상태 {cs1!r}, 남은 {left1!r}")
-                        if cs1 == 0:
+                        was_ok = cs0 == 1 and left0 is not None and 0 < left0 < 2 ** 31
+                        if not was_ok:
+                            self._meas_after_calib = True   # 값을 넣은 뒤 0점 맞추기 창을 띄움
+                        if was_ok and cs1 == 0 and not (left1 is not None and 0 < left1 < 2 ** 31):
                             self._reboot_ok_pref(False)   # 이 기계는 다시 켜면 교정이 풀림 → 다음부터 물음
                             self.after(0, lambda: self._set_status(
                                 "기계를 다시 켜니 교정이 풀렸습니다. 다음부터는 다시 켜기 전에 묻겠습니다."))
@@ -5875,6 +5878,9 @@ class AdvisorApp(tk.Tk):
     def _on_new_measure(self, side, rec):
         """방금 잰 값을 목록에서 고를 필요 없이 바로 색 칸에 넣음."""
         self._set_busy(False)
+        if getattr(self, '_meas_after_calib', False):
+            self._meas_after_calib = False
+            self.after(800, lambda: self._auto_calibrate(need=True))
         self.state_data[side]['measurements'].append(rec['sample_lab'])
         self._update_panel(side)
         side_ko = "기준색" if side == 'ref' else "비교색"
