@@ -169,7 +169,7 @@ def Connect():
             return
         except NotImplementedError:
             raise Exception("USB 드라이버가 WinUSB 가 아닙니다. "
-                            "USB드라이버_바꾸기.bat 을 먼저 실행하십시오")
+                            "기계 메뉴 → USB 드라이버 바꾸기를 하십시오")
         except Exception as e:
             last = e
             msg = str(e)

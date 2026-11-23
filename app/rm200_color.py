@@ -2240,6 +2240,7 @@ class AdvisorApp(tk.Tk):
         if C.get('run') or self.busy:
             return
         C['run'] = True
+        C['started'] = False; C['left0'] = None
         C['go'].config(state=tk.DISABLED, text="맞추는 중...")
         self._set_busy(True, "0점 맞추기(교정) 중입니다. 기계를 움직이지 마십시오")
 
@@ -2263,7 +2264,11 @@ class AdvisorApp(tk.Tk):
                     left = rm.GetTimeToCalibExpired()
             except Exception:
                 return None, None, None
-            return (cs == 1 and left not in (0, None)), cs, left
+            # Ver 0.38: 실제 기계는 교정이 끝나도 상태 값이 몇 초 늦게 1이 됨. 남은 시간이 새로 양수(약 1시간)로
+            # 바뀌면 끝난 것으로 봄(실제 기록: 상태 0, 남은 값 3599 → 곧 상태 1).
+            ok_left = left is not None and 0 < left < 2 ** 31
+            fresh = ok_left and (C.get('left0') is None or not (0 < C['left0'] < 2 ** 31) or left > C['left0'])
+            return ((cs == 1 and ok_left) or (C.get('started') and fresh)), cs, left
 
         def worker():
             ok = False
@@ -2271,6 +2276,7 @@ class AdvisorApp(tk.Tk):
             log("[0점 맞추기] 시작")
             try:
                 done, cs, left = calibrated()
+                C['left0'] = left
                 log(f"  처음 교정 상태 {cs!r}, 남은 값 {left!r}")
                 # Ver 0.28: 실제 기계에서 가운데 단추가 메뉴로 들어가 버려, PC는 옆 측정 단추만 누름.
                 shots = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(PALETTES_FILE))), "교정_화면기록")
@@ -2306,6 +2312,7 @@ class AdvisorApp(tk.Tk):
                         break
                     say("교정판을 재는 중입니다(빨간 단추 누르기)...")
                     log("  위 빨간 단추: 누르고 있기(780f 키 7) → 놓기(키 6)")
+                    C['started'] = True
                     with rm.LOCK:
                         rm.REMOTE_KEYS = True
                         try:
@@ -2359,7 +2366,7 @@ class AdvisorApp(tk.Tk):
                 try:
                     with rm.LOCK:
                         cs2 = rm.GetCalibrationState(); left2 = rm.GetTimeToCalibExpired()
-                    self._show_calib(cs2, left2)
+                    self._show_calib(1 if ok else cs2, left2)   # 상태 값이 늦게 바뀌는 기계
                 except Exception:
                     pass
                 if not C.get('alive'):
@@ -2654,6 +2661,10 @@ class AdvisorApp(tk.Tk):
 
     def _show_calib(self, state, left):
         """교정 상태. 남은 값의 단위는 기계마다 달라 두 번 읽어 줄어드는 빠르기로 시간을 셈."""
+        if left is not None and left >= 2 ** 31:
+            left = 0          # Ver 0.38: 기한이 지난 값(음수가 큰 수로 읽힘)
+        if state == 0 and left and 0 < left <= 3600:
+            state = 1         # Ver 0.38: 교정 직후 상태 값이 늦게 바뀌는 동안(남은 시간은 이미 새로 생김)
         if state == 0 or left == 0:
             self._cal_lbl.config(text="교정 필요", fg='#c62828')
             self._cal_first = None
@@ -2678,6 +2689,11 @@ class AdvisorApp(tk.Tk):
         txt = "교정 됨"
         el = now - f[0]
         d = f[1] - left
+        if left < 2 ** 31:
+            # Ver 0.38: 실제 기계 기록으로 남은 값 단위가 초인 것을 확인(3599 → 43초 뒤 3557)
+            txt = (f"교정 됨 ({left // 60}분 남음)" if left < 7200 else f"교정 됨 (약 {left / 3600:.0f}시간 남음)")
+            self._cal_lbl.config(text=txt, fg='#2e7d32' if left >= 600 else '#e65100')
+            return
         if el >= 50 and d > 0:
             secs = left * el / d
             if secs >= 86400:
@@ -5617,7 +5633,8 @@ class AdvisorApp(tk.Tk):
                 except Exception:
                     cs = left = None
                 self._meas_log(f"  교정 상태 {cs!r}, 만료까지 {left!r}")
-                if cs == 0 or left == 0:
+                left_ok = left is not None and 0 < left < 2 ** 31   # Ver 0.38: 큰 수 = 기한 지남
+                if left == 0 or (left is not None and not left_ok) or (cs == 0 and not left_ok):
                     raise RuntimeError("CALIB")
                 if token != self._meas_token:
                     return
@@ -5676,7 +5693,9 @@ class AdvisorApp(tk.Tk):
                 fresh = []
                 # Ver 0.34: 기계를 다시 켜지 않음(다시 켜면 0점을 다시 맞춰야 함).
                 # 기계는 측정값을 파일에 바로 적지 않고 모아서 적으므로, 기다렸다 다시 읽고 → USB만 다시 붙여 읽음.
-                waits = (0, 2, 3, 5, 'usb', 3)
+                # Ver 0.38: 실제 기계 기록 — 기다려도, USB를 다시 붙여도 파일에 적지 않음(다시 켤 때만 적음).
+                # 그래서 한 번만 더 읽어 보고 바로 다음 단계로.
+                waits = (0, 2)
                 for attempt, wait in enumerate(waits):
                     if token != self._meas_token:
                         return
@@ -5700,7 +5719,31 @@ class AdvisorApp(tk.Tk):
                 if not fresh and before is not None:
                     self._meas_record_probe(cnt)
                     self._meas_before = (before, rec_key)
-                    raise RuntimeError("NOTYET")
+                    # Ver 0.38: 실제 기계 기록 — 기계를 다시 켜도 교정은 그대로였음(다시 켠 뒤 상태 1, 남은 3557초).
+                    # 교정이 2분 넘게 남아 있으면 묻지 않고 다시 켜서 꺼냄. 다시 켠 뒤 교정이 풀리면 다음부터는 물음.
+                    try:
+                        cs0 = safe_command(rm.GetCalibrationState); left0 = safe_command(rm.GetTimeToCalibExpired)
+                    except Exception:
+                        cs0 = left0 = None
+                    if self._reboot_ok_pref() and cs0 == 1 and left0 is not None and 120 < left0 < 2 ** 31:
+                        stage("값 꺼내는 중 (기계를 잠깐 다시 켭니다, 약 10초. 교정은 그대로)")
+                        self._meas_log(f"  다시 켜서 꺼내기(교정 {left0}초 남음)")
+                        if not self._reboot_device():
+                            raise RuntimeError("기계를 다시 켠 뒤 연결하지 못했습니다. [RM200 다시 연결]을 누르십시오")
+                        time.sleep(0.5)
+                        records = parse_measdata(safe_command(rm.FetchFile, "MeasDataV05.dat"))
+                        fresh = [r for r in records if rec_key(r) not in before]
+                        try:
+                            cs1 = safe_command(rm.GetCalibrationState); left1 = safe_command(rm.GetTimeToCalibExpired)
+                        except Exception:
+                            cs1 = left1 = None
+                        self._meas_log(f"  다시 켠 뒤: 새 것 {len(fresh)}개, 교정 상태 {cs1!r}, 남은 {left1!r}")
+                        if cs1 == 0:
+                            self._reboot_ok_pref(False)   # 이 기계는 다시 켜면 교정이 풀림 → 다음부터 물음
+                            self.after(0, lambda: self._set_status(
+                                "기계를 다시 켜니 교정이 풀렸습니다. 다음부터는 다시 켜기 전에 묻겠습니다."))
+                    if not fresh:
+                        raise RuntimeError("NOTYET")
                 if records:
                     self._known_keys = {rec_key(r) for r in records}
                 try:
@@ -5725,12 +5768,32 @@ class AdvisorApp(tk.Tk):
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def _reboot_ok_pref(self, val=None):
+        """Ver 0.38: '측정값 꺼낼 때 다시 켜도 교정이 그대로인 기계인가' (이 PC에 기억)."""
+        path = os.path.join(os.path.dirname(os.path.abspath(PALETTES_FILE)), ".sync", "reboot_ok.txt")
+        if val is None:
+            try:
+                with open(path, encoding='utf-8') as f:
+                    return f.read().strip() != '0'
+            except Exception:
+                return True
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write('1' if val else '0')
+        except Exception:
+            pass
+
     def _meas_record_probe(self, cnt):
         """Ver 0.34: 파일 말고 기계 기록 명령(7820)으로 마지막 기록을 읽어 진행 기록에 남김(값 위치 배우기용, 읽기만)."""
         try:
             n = int(cnt or 0) - 1
             if n < 0:
                 return
+            with rm.LOCK:   # Ver 0.38: 0번이 가장 새 기록인지도 확인
+                r0 = rm._lib.CommandData(b"\x78\x20" + (0).to_bytes(2, "big"))
+            if r0 is not None:
+                self._meas_log(f"  기계 기록 0번 앞부분 {bytes(r0)[:80].hex(' ')}")
             with rm.LOCK:
                 raw = rm._lib.CommandData(b"\x78\x20" + n.to_bytes(2, "big"))
             if raw is None:
