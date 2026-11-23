@@ -5519,22 +5519,33 @@ class AdvisorApp(tk.Tk):
 
                 records = []
                 fresh = []
-                for attempt in range(3):
+                # Ver 0.34: 기계를 다시 켜지 않음(다시 켜면 0점을 다시 맞춰야 함).
+                # 기계는 측정값을 파일에 바로 적지 않고 모아서 적으므로, 기다렸다 다시 읽고 → USB만 다시 붙여 읽음.
+                waits = (0, 2, 3, 5, 'usb', 3)
+                for attempt, wait in enumerate(waits):
                     if token != self._meas_token:
                         return
-                    if attempt > 0:
-                        # 기계가 아직 파일에 옮겨 적지 않음 → 기계를 다시 켜서 옮기게 함
-                        stage("값 꺼내는 중 (기계를 잠깐 다시 켭니다, 약 10초)")
-                        if not self._reboot_device():
-                            raise RuntimeError("기계를 다시 켠 뒤 연결하지 못했습니다. [RM200 다시 연결]을 누르십시오")
+                    if wait == 'usb':
+                        stage("값 꺼내는 중 (USB만 다시 붙임, 기계는 켜진 그대로)")
+                        self._meas_log("  USB 다시 붙이기(기계 끄지 않음)")
+                        with rm.LOCK:
+                            self._reconnect_device()
                         time.sleep(0.5)
+                    elif wait:
+                        stage(f"기계가 값을 파일에 적기를 기다리는 중 ({attempt}번째)")
+                        time.sleep(wait)
                     stage("기록 읽는 중")
                     data = safe_command(rm.FetchFile, "MeasDataV05.dat")
                     records = parse_measdata(data)
                     if before is not None:
                         fresh = [r for r in records if rec_key(r) not in before]
-                    if fresh or before is None or attempt == 2:
+                    self._meas_log(f"  기록 읽기 {attempt + 1}번째: 전체 {len(records)}개, 새 것 {len(fresh)}개")
+                    if fresh or before is None:
                         break
+                if not fresh and before is not None:
+                    self._meas_record_probe(cnt)
+                    self._meas_before = (before, rec_key)
+                    raise RuntimeError("NOTYET")
                 if records:
                     self._known_keys = {rec_key(r) for r in records}
                 try:
@@ -5559,6 +5570,55 @@ class AdvisorApp(tk.Tk):
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def _meas_record_probe(self, cnt):
+        """Ver 0.34: 파일 말고 기계 기록 명령(7820)으로 마지막 기록을 읽어 진행 기록에 남김(값 위치 배우기용, 읽기만)."""
+        try:
+            n = int(cnt or 0) - 1
+            if n < 0:
+                return
+            with rm.LOCK:
+                raw = rm._lib.CommandData(b"\x78\x20" + n.to_bytes(2, "big"))
+            if raw is None:
+                self._meas_log("  기계 기록 읽기(7820): 대답 없음")
+                return
+            raw = bytes(raw)
+            txt = raw[15:400].decode("utf-16le", "replace").replace("\x00", " | ")
+            self._meas_log(f"  기계 기록 {n}번 (7820) 길이 {len(raw)}: 글자 {txt[:300]!r}")
+            self._meas_log(f"  앞부분 {raw[:96].hex(' ')}")
+        except Exception as ex:
+            self._meas_log(f"  기계 기록 읽기 오류 {ex!r}")
+
+    def _meas_reboot_fetch(self, side):
+        """대표님이 [예]를 고른 때만: 기계를 다시 켜서 파일에 적게 한 뒤 목록에서 고르게 함."""
+        self._set_busy(True, "기계를 다시 켜서 측정값을 꺼내는 중입니다(약 10초)...")
+
+        def worker():
+            err = None
+            records = None
+            try:
+                self._meas_log("  대표님 선택: 기계 다시 켜서 꺼내기")
+                if not self._reboot_device():
+                    raise RuntimeError("기계를 다시 켠 뒤 연결하지 못했습니다")
+                time.sleep(0.5)
+                records = parse_measdata(safe_command(rm.FetchFile, "MeasDataV05.dat"))
+            except Exception as ex:
+                err = ex
+            fresh = []
+            try:
+                before, rec_key = self._meas_before
+                fresh = [r for r in (records or []) if rec_key(r) not in before]
+                if records:
+                    self._known_keys = {rec_key(r) for r in records}
+            except Exception:
+                pass
+            if fresh and err is None:
+                newest = sorted(fresh, key=lambda r: (r.get('counter') or 0, r['datetime']))[-1]
+                self._meas_log(f"  다시 켠 뒤 꺼냄: L={newest['sample_lab'][0]:.2f}")
+                self.after(0, lambda: self._on_new_measure(side, newest))
+            else:
+                self.after(0, lambda: self._on_pick_records(side, records, err))
+        threading.Thread(target=worker, daemon=True).start()
+
     def _meas_fail(self, token, side, e):
         if not self._meas_end(token):
             return
@@ -5571,6 +5631,17 @@ class AdvisorApp(tk.Tk):
             self._set_status("기계 화면에 경고가 떠 있어 측정하지 못했습니다")
             self._dev_alert = False
             self._set_dev_alert(True, getattr(self, '_last_lcd', None))
+            return
+        if str(e) == "NOTYET":
+            self._set_status("기계가 측정값을 아직 파일에 적지 않았습니다")
+            if messagebox.askyesno(
+                    "측정값을 아직 꺼내지 못했습니다",
+                    "기계는 측정은 했지만 값을 아직 파일에 적지 않았습니다.\n"
+                    "(기계는 값을 모아 두었다가 한꺼번에 적습니다)\n\n"
+                    "[예] 기계를 다시 켜서 지금 꺼냅니다. 다시 켜면 0점을 다시 맞춰야 할 수 있습니다.\n"
+                    "[아니오] 기계를 그대로 둡니다. 다음 측정 때나 [가져오기]로 함께 꺼냅니다.",
+                    parent=self):
+                self._meas_reboot_fetch(side)
             return
         if str(e) == "NOMEAS":
             self._set_status("기계가 측정하지 않았습니다")
