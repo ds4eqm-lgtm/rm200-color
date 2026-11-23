@@ -1,9 +1,9 @@
 {
- "ver": "0.39",
+ "ver": "0.41",
  "files": {
   "make_shortcut.py": "f8bfe70f0ebaedc0a7c784fafc580a42ec0d826f45f339a5b589e4b0a3439223",
   "pantone_fandecks.json": "4e7059ebef090795cfd2b323d264d95d1dc20501604776493657ee27bb2d5e0a",
-  "rm200_color.py": "925bec066f9324b5b7bbb1eae1d3dce89ec3b1edc109f894ea826a447feae9e2",
+  "rm200_color.py": "ebe84cb769355f80d0f09f9658b7d28571ad593ad252e9cf4c9d3db29347ab3d",
   "rm200_safe.py": "933a48f4ae7d2f243f80046fcf59f89f021338b50bdc0f7e420f30ea9475d429",
   "rm200_sync.py": "bd85113bbd94cbecf72f4dfaeae8bf17f1f1a76f9bb0b415c2fcc11d0944647b",
   "rm200_update.py": "9ec7509cf9f35cd0cf92c2ab4255fe4707358e2474caa87836dc925306253cea",

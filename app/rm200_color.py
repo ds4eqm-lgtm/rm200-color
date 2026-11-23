@@ -2134,12 +2134,15 @@ class AdvisorApp(tk.Tk):
         w.configure(bg='#ffffff'); w.transient(self)
         C = {'run': False, 'alive': True}
         self._cal_C = C
-        tk.Label(w, text=("기계가 교정(0점 맞추기)을 원합니다." if need else "PC에서 0점 맞추기(교정)"),
+        # Ver 0.40: PC가 기계 단추를 대신 누르는 0점 맞추기는 뺌(대표님 지시). 기계 단추로 하시는 동안
+        # 기계 화면을 보여 주고, 끝났는지 PC가 살펴 알려 줌(기계로는 읽기만 보냄).
+        tk.Label(w, text=("기계가 교정(0점 맞추기)을 원합니다" if need else "0점 맞추기(교정)"),
                  bg='#ffffff', fg='#c62828' if need else '#1e3a5f',
                  font=('맑은 고딕', 14, 'bold')).pack(padx=18, pady=(14, 4), anchor='w')
-        tk.Label(w, text="1. 기계를 덮개 안쪽 흰 교정판 위에 올려 놓으십시오(덮개를 닫은 상태).\n"
-                         "2. 아래 [0점 맞추기 시작]을 누르십시오. 기계 단추는 누르지 않아도 됩니다.\n"
-                         "3. 끝나면 \"0점 맞추기 끝\"이 나옵니다. 그 뒤 측정하면 됩니다.",
+        tk.Label(w, text="1. 덮개를 닫아 기계를 흰 교정판 위에 둡니다.\n"
+                         "2. 기계 위쪽 빨간 단추를 한 번 누르십시오.\n"
+                         "3. 끝나면 이 창에 \"0점 맞추기 끝\"이 나오고 저절로 닫힙니다.\n"
+                         "   (기계에 경고가 뜨면 USB 선을 잠깐 빼고 누른 뒤 다시 꽂으십시오)",
                  bg='#ffffff', fg='#333', justify=tk.LEFT,
                  font=('맑은 고딕', 11)).pack(padx=18, pady=(0, 8), anchor='w')
         body = tk.Frame(w, bg='#ffffff'); body.pack(padx=18, pady=4, anchor='w')
@@ -2147,27 +2150,59 @@ class AdvisorApp(tk.Tk):
                                 highlightthickness=1, highlightbackground='#888')
         C['canvas'].pack(side=tk.LEFT)
         right = tk.Frame(body, bg='#ffffff'); right.pack(side=tk.LEFT, padx=(16, 0), fill=tk.Y)
-        C['state'] = tk.StringVar(value="준비되면 [0점 맞추기 시작]을 누르십시오.")
+        C['state'] = tk.StringVar(value="기계 위 빨간 단추를 눌러 주십시오.\n끝나는 것을 기다리는 중...")
         C['lbl'] = tk.Label(right, textvariable=C['state'], bg='#ffffff', fg='#1e3a5f', wraplength=300,
                             justify=tk.LEFT, font=('맑은 고딕', 12, 'bold'))
         C['lbl'].pack(anchor='w', pady=(4, 10))
-        C['go'] = tk.Button(right, text="0점 맞추기 시작", command=lambda: self._cal_start(C),
-                            font=('맑은 고딕', 13, 'bold'), bg='#1e6fd9', fg='white', relief=tk.FLAT,
-                            activebackground='#1557b0', activeforeground='white', cursor='hand2',
-                            padx=18, pady=8)
-        C['go'].pack(anchor='w')
         C['rb'] = tk.Button(right, text="기계 다시 켜기 (처음 화면으로)", command=lambda: self._cal_reboot(C),
                             font=('맑은 고딕', 11, 'bold'), bg='#455a64', fg='white', relief=tk.FLAT,
                             activebackground='#37474f', activeforeground='white', cursor='hand2',
                             padx=12, pady=4)
         C['rb'].pack(anchor='w', pady=(10, 0))
-        tk.Button(right, text="단추로 직접 하기(기계 화면 칸)", command=lambda: self._cal_manual(),
-                  relief=tk.FLAT, fg='#1e6fd9', bg='#ffffff', cursor='hand2',
-                  font=('맑은 고딕', 10, 'underline')).pack(anchor='w', pady=(14, 0))
         tk.Button(w, text="닫기", command=self._cal_close, relief=tk.FLAT, padx=16, pady=3,
                   font=('맑은 고딕', 11), cursor='hand2').pack(pady=(8, 12))
         w.protocol("WM_DELETE_WINDOW", self._cal_close)
         self._cal_peek(C)
+        self.after(2000, lambda: self._cal_watch(C, None))
+
+    def _cal_watch(self, C, left0):
+        """Ver 0.40: 기계 단추로 교정하는 동안 2초마다 기계 화면과 남은 시간을 읽어 끝났는지 봄(읽기만)."""
+        if not C.get('alive'):
+            return
+        if C.get('run') or self.busy:
+            self.after(2000, lambda: self._cal_watch(C, left0))
+            return
+
+        def worker():
+            lcd = cs = left = None
+            try:
+                with rm.LOCK:
+                    lcd = rm.GetLcdData()
+                    cs = rm.GetCalibrationState()
+                    left = rm.GetTimeToCalibExpired()
+            except Exception:
+                pass
+            self.after(0, lambda: fin(lcd, cs, left))
+
+        def fin(lcd, cs, left):
+            if not C.get('alive'):
+                return
+            self._cal_draw(C, lcd)
+            ok_left = left is not None and 0 < left < 2 ** 31
+            # 끝남 = 남은 시간이 새로 생김(기한 지남 → 양수) 또는 남은 시간이 다시 늘어남(다시 교정)
+            if left0 is not None and ok_left and (not (0 < left0 < 2 ** 31) or left > left0 + 5):
+                self._show_calib(1, left)
+                C['state'].set("0점 맞추기 끝. 이제 측정하면 됩니다."); C['lbl'].config(fg='#2e7d32')
+                self._set_status("0점 맞추기(교정)를 마쳤습니다")
+                self._meas_log(f"[0점 맞추기] 기계 단추로 끝남, 남은 {left}초")
+                self.after(2500, self._cal_close)
+                return
+            if ok_left:
+                C['state'].set(f"지금은 교정되어 있습니다 ({left // 60}분 남음).\n"
+                               "다시 하시려면 기계 위 빨간 단추를 누르십시오.")
+            base = left if left is not None else left0
+            self.after(2000, lambda: self._cal_watch(C, base))
+        threading.Thread(target=worker, daemon=True).start()
 
     def _cal_reboot(self, C):
         if C.get('run') or self.busy:
@@ -2413,12 +2448,6 @@ class AdvisorApp(tk.Tk):
             P['btns'].append(b)
         kb("▲\n위", 2, 0, 1); kb("◀\n왼쪽", 4, 1, 0); kb("●\n가운데", 1, 1, 1, big=True)
         kb("▶\n오른쪽", 5, 1, 2); kb("▼\n아래", 3, 2, 1)
-        rb = tk.Button(pad, text="● 위 빨간 측정 단추 (눈금 조정·측정)", command=lambda: self._remote_press(P, 8),
-                       relief=tk.RAISED, font=('맑은 고딕', 11, 'bold'), bg='#c62828', fg='white',
-                       activebackground='#9e1f1f', activeforeground='white', cursor='hand2',
-                       state=tk.DISABLED, height=2)
-        rb.grid(row=3, column=0, columnspan=3, sticky='we', padx=4, pady=(14, 4))
-        P['btns'].append(rb)
         mb = tk.Button(pad, text="측정 명령 보내기\n(처음 화면에서 측정)", command=lambda: self._remote_measure(P),
                        relief=tk.RAISED, font=('맑은 고딕', 11, 'bold'), bg='#e65100', fg='white',
                        activebackground='#bf4300', activeforeground='white', cursor='hand2',
@@ -2446,8 +2475,7 @@ class AdvisorApp(tk.Tk):
         w.title("기계 원격 단추")
         w.configure(bg='#ffffff')
         w.transient(self)
-        head = ("교정하기: 기계를 덮개 안 흰 교정판에 올려 놓으십시오.\n"
-                "기계 화면 안내를 보면서 PC의 단추를 누르면 됩니다 (기계는 손으로 누르지 않아도 됩니다)."
+        head = ("교정하기: 덮개를 닫아 흰 교정판 위에 두고 기계 위 빨간 단추를 누르십시오."
                 if calib else
                 "왼쪽은 지금 기계 화면입니다(1초마다 새로 고침).\n"
                 "화면을 보면서 오른쪽 단추를 누르면 기계 단추를 누른 것과 같습니다.")
@@ -4352,7 +4380,7 @@ class AdvisorApp(tk.Tk):
                    command=self._on_cal_state).pack(side=tk.LEFT, padx=2)
         ttk.Button(row, text="교정 만료까지 남은 시간",
                    command=self._on_cal_expiry).pack(side=tk.LEFT, padx=2)
-        tk.Button(frame, text="PC에서 0점 맞추기(교정)", command=self._auto_calibrate,
+        tk.Button(frame, text="0점 맞추기 안내 (기계 단추로, 끝나면 PC가 알려 줌)", command=self._auto_calibrate,
                   font=('맑은 고딕', 13, 'bold'), bg='#1e6fd9', fg='white', relief=tk.FLAT,
                   activebackground='#1557b0', activeforeground='white', cursor='hand2',
                   padx=18, pady=8).pack(anchor='w', pady=(0, 10))
