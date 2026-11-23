@@ -757,7 +757,8 @@ class AdvisorApp(tk.Tk):
 
     def _build_menu(self):
         self._menus = [
-            ("파일", [("측정 기록 파일(MeasDataV05.dat) 저장...", self._menu_save_dump), None,
+            ("파일", [("출장에서 잰 색 한꺼번에 불러오기...", lambda: self._bulk_import()),
+                      ("측정 기록 파일(MeasDataV05.dat) 저장...", self._menu_save_dump), None,
                       ("팔레트 모두 내보내기(JSON)...", self._on_palette_export_all),
                       ("팔레트 가져오기(JSON)...", self._on_palette_import_all), None,
                       ("바탕화면·시작 메뉴 바로가기 (설치 선택)", lambda: self._install_dialog()), None,
@@ -1303,6 +1304,7 @@ class AdvisorApp(tk.Tk):
         sb("플로우", lambda: self._share('flow'), '#5b4bd5')
         sb("메일", lambda: self._share('mail'), '#1e6fd9')
         sb("다른 앱", lambda: self._share('other'), '#607d8b')
+        sb("QR 코드", lambda: self._share('qr'), '#111111')
 
     # ---- 주소 나눠 주기 ----
     def _share(self, how):
@@ -1323,11 +1325,15 @@ class AdvisorApp(tk.Tk):
                 import webbrowser, urllib.parse
                 webbrowser.open('mailto:?subject=' + urllib.parse.quote('RM200 측색계')
                                 + '&body=' + urllib.parse.quote(text)); opened = True
+            elif how == 'qr':
+                # Ver 0.43: 휴대폰 앱·PC 받기 주소 QR 두 개를 크게 보여 주는 쪽을 엶
+                import webbrowser
+                webbrowser.open('https://ds4eqm-lgtm.github.io/rm200-color/phone/qr.html'); opened = True
             elif how == 'other' and os.name == 'nt':
                 os.startfile(url); opened = True
         except Exception:
             opened = False
-        names = {'copy': '', 'kakao': '카카오톡', 'flow': '플로우', 'mail': '메일', 'other': '받는 곳 페이지'}
+        names = {'copy': '', 'kakao': '카카오톡', 'flow': '플로우', 'mail': '메일', 'other': '받는 곳 페이지', 'qr': 'QR 코드 쪽'}
         if how == 'copy' or not opened:
             self._set_status(f"주소를 복사했습니다. 보낼 곳에 붙여 넣기(Ctrl+V) 하십시오: {url}")
         else:
@@ -3312,6 +3318,8 @@ class AdvisorApp(tk.Tk):
                    command=self._on_palette_entry_delete).pack(side=tk.LEFT, padx=3)
         ttk.Button(bottom, text="색 복사",
                    command=self._on_palette_entry_dup).pack(side=tk.LEFT, padx=3)
+        ttk.Button(bottom, text="출장에서 잰 색 한꺼번에 불러오기",
+                   command=lambda: self._bulk_import()).pack(side=tk.LEFT, padx=(14, 3))
 
         self.palettes_status = tk.StringVar(value="")
         ttk.Label(frame, textvariable=self.palettes_status,
@@ -6237,6 +6245,249 @@ class AdvisorApp(tk.Tk):
         w['listbox'].config(state=tk.DISABLED)
 
     # ---- Ver 0.13: 잰 색을 팬톤에서 찾기 ----
+    # ---- Ver 0.42: 출장에서 잰 색 한꺼번에 불러오기 ----
+    # 기계에 쌓인 측정 기록 파일(MeasDataV05.dat)을 읽기만 합니다. 기계 안의 기록은 지우지 않습니다.
+    def _bulk_path(self):
+        return os.path.join(os.path.dirname(os.path.abspath(PALETTES_FILE)), ".sync", "imported_records.json")
+
+    @staticmethod
+    def _bulk_key(r):
+        return f"{r.get('datetime')}|{r.get('counter')}|{r.get('id')}"
+
+    def _bulk_done_keys(self):
+        try:
+            with open(self._bulk_path(), 'r', encoding='utf-8') as f:
+                return set(json.load(f))
+        except Exception:
+            return set()
+
+    def _bulk_mark(self, keys):
+        done = self._bulk_done_keys() | set(keys)
+        p = self._bulk_path()
+        try:
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            with open(p + ".tmp", 'w', encoding='utf-8') as f:
+                json.dump(sorted(done), f, ensure_ascii=False)
+            os.replace(p + ".tmp", p)
+        except Exception:
+            pass
+
+    def _bulk_import(self):
+        if not self.connected:
+            messagebox.showerror("출장에서 잰 색", "먼저 RM200을 USB로 연결하십시오.")
+            return
+        if self.busy:
+            messagebox.showinfo("출장에서 잰 색", "기계가 다른 일을 하는 중입니다. 잠시 뒤에 다시 누르십시오.")
+            return
+        from PIL import Image, ImageDraw
+        W = tk.Toplevel(self)
+        W.title("출장에서 잰 색 한꺼번에 불러오기")
+        W.geometry("1040x640")
+        W.transient(self)
+        self._bulk_win = W
+        st = {'recs': [], 'on': set(), 'imgs': {}, 'busy': False}
+        today = dt.datetime.now().strftime('%Y-%m-%d')
+        tk.Label(W, text="기계에 쌓인 측정값을 모두 읽어 옵니다. 고른 색을 내 팔레트에 한 번에 넣습니다.\n"
+                         "방금 잰 것이 목록에 없으면 [다시 켜고 다시 읽기]를 누르십시오. 기계가 다시 켜질 때 기록을 파일에 적습니다(교정은 그대로).",
+                 justify=tk.LEFT, anchor='w', font=('맑은 고딕', 10), fg='#1e3a5f').pack(fill=tk.X, padx=12, pady=(10, 4))
+        fr = ttk.Frame(W); fr.pack(fill=tk.BOTH, expand=True, padx=12)
+        sty = ttk.Style(W); sty.configure('Bulk.Treeview', rowheight=30, font=('맑은 고딕', 10))
+        cols = ('when', 'dev', 'lab', 'pt', 'state')
+        tv = ttk.Treeview(fr, columns=cols, style='Bulk.Treeview', selectmode='none')
+        for c, t, w in (('#0', '고르기 · 색', 90), ('when', '잰 때', 150), ('dev', '기계가 고른 색', 220),
+                        ('lab', 'L  a  b', 170), ('pt', '가장 가까운 팬톤 (ΔE)', 250), ('state', '', 80)):
+            tv.heading(c, text=t); tv.column(c, width=w, stretch=(c in ('dev', 'pt')))
+        sb = ttk.Scrollbar(fr, orient=tk.VERTICAL, command=tv.yview); tv.configure(yscrollcommand=sb.set)
+        tv.pack(side=tk.LEFT, fill=tk.BOTH, expand=True); sb.pack(side=tk.LEFT, fill=tk.Y)
+        tv.tag_configure('old', foreground='#888')
+        self._bulk_tv = tv
+
+        def img(i):
+            r = st['recs'][i]; on = i in st['on']
+            k = (on, r['_rgb'])
+            if k not in st['imgs']:
+                im = Image.new('RGBA', (176, 88), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+                if on:
+                    d.ellipse((8, 8, 80, 80), outline=(30, 111, 217, 255), width=7, fill=(255, 255, 255, 255))
+                    d.ellipse((24, 24, 64, 64), fill=(30, 111, 217, 255))
+                else:
+                    d.ellipse((8, 8, 80, 80), outline=(150, 150, 150, 255), width=7, fill=(255, 255, 255, 255))
+                d.rounded_rectangle((100, 6, 170, 82), radius=10, fill=r['_rgb'] + (255,), outline=(180, 180, 180, 255), width=3)
+                st['imgs'][k] = ImageTk.PhotoImage(im.resize((48, 24), Image.LANCZOS))
+            return st['imgs'][k]
+
+        def fill():
+            tv.delete(*tv.get_children())
+            for i, r in enumerate(st['recs']):
+                L, a, b = r['sample_lab']
+                tv.insert('', 'end', iid=str(i), image=img(i), text='',
+                          values=(r['datetime'], (r.get('name') or '-') + (f"  [{r['fandeck']}]" if r.get('fandeck') else ''),
+                                  f"{L:6.2f} {a:6.2f} {b:6.2f}", r['_pt'], '들여옴' if r['_old'] else '새 것'),
+                          tags=('old',) if r['_old'] else ())
+            n_new = sum(1 for r in st['recs'] if not r['_old'])
+            status.set(f"기계 기록 {len(st['recs'])}개 (새 것 {n_new}개) · 고른 것 {len(st['on'])}개")
+
+        def redraw(i):
+            if tv.exists(str(i)):
+                tv.item(str(i), image=img(i))
+            status.set(f"기계 기록 {len(st['recs'])}개 · 고른 것 {len(st['on'])}개")
+
+        def click(e):
+            row = tv.identify_row(e.y)
+            if not row:
+                return
+            i = int(row)
+            st['on'].symmetric_difference_update({i})
+            redraw(i)
+        tv.bind('<Button-1>', click)
+
+        def pick(kind):
+            st['on'] = set(i for i, r in enumerate(st['recs']) if kind == 'all' or (kind == 'new' and not r['_old']))
+            for i in range(len(st['recs'])):
+                redraw(i)
+
+        bar = ttk.Frame(W); bar.pack(fill=tk.X, padx=12, pady=(6, 0))
+        ttk.Button(bar, text="새 것 모두 고르기", command=lambda: pick('new')).pack(side=tk.LEFT, padx=2)
+        ttk.Button(bar, text="모두 고르기", command=lambda: pick('all')).pack(side=tk.LEFT, padx=2)
+        ttk.Button(bar, text="모두 풀기", command=lambda: pick('none')).pack(side=tk.LEFT, padx=2)
+        b_read = ttk.Button(bar, text="다시 읽기", command=lambda: read(False)); b_read.pack(side=tk.RIGHT, padx=2)
+        b_rb = ttk.Button(bar, text="다시 켜고 다시 읽기", command=lambda: read(True)); b_rb.pack(side=tk.RIGHT, padx=2)
+
+        bar2 = ttk.Frame(W); bar2.pack(fill=tk.X, padx=12, pady=(8, 0))
+        ttk.Label(bar2, text="넣을 팔레트:").pack(side=tk.LEFT)
+        pal_var = tk.StringVar(value=f"출장 측정/{today}")
+        ttk.Entry(bar2, textvariable=pal_var, width=30).pack(side=tk.LEFT, padx=4)
+        share_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(bar2, text="공용 기록에도 올리기 (휴대폰 앱·다른 PC에서도 보임)", variable=share_var).pack(side=tk.LEFT, padx=10)
+        self._bulk_pal_var, self._bulk_share_var, self._bulk_st = pal_var, share_var, st
+
+        bar3 = ttk.Frame(W); bar3.pack(fill=tk.X, padx=12, pady=8)
+        b_go = ttk.Button(bar3, text="고른 색 내 팔레트에 넣기", command=lambda: put()); b_go.pack(side=tk.LEFT, padx=2)
+        ttk.Button(bar3, text="고른 색 엑셀(CSV)로 저장...", command=lambda: csv_save()).pack(side=tk.LEFT, padx=2)
+        ttk.Button(bar3, text="닫기", command=W.destroy).pack(side=tk.RIGHT, padx=2)
+        status = tk.StringVar(value="기계 기록을 읽는 중...")
+        tk.Label(W, textvariable=status, anchor='w', font=('맑은 고딕', 10, 'bold'), fg='#2e7d32').pack(fill=tk.X, padx=12, pady=(0, 8))
+        self._bulk_status = status
+
+        def prep(records):
+            done = self._bulk_done_keys()
+            out = []
+            for r in sorted(records, key=lambda r: (r['datetime'], r['counter']), reverse=True):
+                L, a, b = r['sample_lab']
+                r = dict(r)
+                r['_rgb'] = tuple(lab_to_rgb(L, a, b))
+                try:
+                    h = self._nearest_pantone(L, a, b)
+                    r['_pt'] = f"{h[0][1][0]} ({h[0][0]:.2f})" if h else '-'
+                    r['_ptn'] = h[0][1][0] if h else ''
+                except Exception:
+                    r['_pt'], r['_ptn'] = '-', ''
+                r['_old'] = self._bulk_key(r) in done
+                out.append(r)
+            return out
+
+        def read(reboot):
+            if st['busy']:
+                return
+            if reboot and not messagebox.askyesno("다시 켜고 다시 읽기",
+                    "기계를 다시 켭니다. 방금 잰 것까지 기록 파일에 적힙니다.\n교정(0점)은 그대로 남습니다. 할까요?", parent=W):
+                return
+            st['busy'] = True
+            status.set("기계를 다시 켜는 중..." if reboot else "기계 기록을 읽는 중...")
+            for b in (b_read, b_rb, b_go):
+                b.config(state=tk.DISABLED)
+
+            def worker():
+                err, recs = None, None
+                try:
+                    if reboot and not self._reboot_device():
+                        raise RuntimeError("기계를 다시 켠 뒤 연결하지 못했습니다")
+                    recs = parse_measdata(safe_command(rm.FetchFile, "MeasDataV05.dat") or b'')
+                except Exception as ex:
+                    err = ex
+                self.after(0, lambda: done_read(recs, err))
+            threading.Thread(target=worker, daemon=True).start()
+
+        def done_read(recs, err):
+            st['busy'] = False
+            if not W.winfo_exists():
+                return
+            for b in (b_read, b_rb, b_go):
+                b.config(state=tk.NORMAL)
+            if err is not None:
+                status.set(f"읽지 못했습니다: {err}")
+                return
+            st['recs'] = prep(recs or [])
+            st['on'] = set(i for i, r in enumerate(st['recs']) if not r['_old'])
+            fill()
+            if not st['recs']:
+                status.set("기계에 측정 기록이 없습니다. 방금 쟀다면 [다시 켜고 다시 읽기]를 누르십시오.")
+
+        def chosen():
+            return [st['recs'][i] for i in sorted(st['on'])]
+
+        def put():
+            rs = chosen()
+            if not rs:
+                messagebox.showinfo("출장에서 잰 색", "고른 색이 없습니다. 왼쪽 동그라미를 눌러 고르십시오.", parent=W)
+                return
+            name = pal_var.get().strip().strip('/') or f"출장 측정/{today}"
+            p = self.palettes.setdefault(name, {'entries': []})
+            for r in reversed(rs):   # 먼저 잰 것이 위로
+                d = r['datetime'][5:16]
+                label = f"{d} {r.get('name') or r.get('_ptn') or '측정'}".strip()
+                p['entries'].append({'name': label, 'lab': tuple(float(x) for x in r['sample_lab'])})
+            self._save_palettes()
+            self._bulk_mark([self._bulk_key(r) for r in rs])
+            try:
+                self.palettes_tab_selector_var.set(name)
+                self._refresh_palette_list()
+                self._refresh_palette_entries()
+            except Exception:
+                pass
+            msg = f"'{name}' 팔레트에 {len(rs)}색을 넣었습니다."
+            if share_var.get() and getattr(self, '_cloud_on', False):
+                items = []
+                for r in rs:
+                    t = r['datetime']
+                    items.append({'name': r.get('name') or r.get('_ptn') or '측정', 'deck': r.get('fandeck') or '출장 측정',
+                                  'lab': [round(float(x), 2) for x in r['sample_lab']], 'who': self._pc_name,
+                                  'when': f"{int(t[5:7])}/{int(t[8:10])} {t[11:16]}", 't': int(time.time())})
+
+                def up():
+                    try:
+                        ok = cloud.add_log(items, self._pc_name)
+                    except Exception:
+                        ok = False
+                    self.after(0, lambda: status.set(status.get() + (" 공용 기록에도 올렸습니다." if ok else " 공용 기록에는 올리지 못했습니다(인터넷 확인).")))
+                threading.Thread(target=up, daemon=True).start()
+            for r in rs:
+                r['_old'] = True
+            st['on'] = set()
+            fill()
+            status.set(msg)
+            self._set_status(msg)
+
+        def csv_save():
+            rs = chosen() or st['recs']
+            if not rs:
+                return
+            path = filedialog.asksaveasfilename(parent=W, title="엑셀(CSV)로 저장", defaultextension=".csv",
+                                                initialfile=f"출장측정_{today}.csv", filetypes=[("CSV", "*.csv")])
+            if not path:
+                return
+            with open(path, 'w', encoding='utf-8-sig', newline='') as f:
+                import csv
+                w = csv.writer(f)
+                w.writerow(['잰 때', '기계가 고른 색', '견본책', 'L', 'a', 'b', '가장 가까운 팬톤 (ΔE)'])
+                for r in rs:
+                    L, a, b = r['sample_lab']
+                    w.writerow([r['datetime'], r.get('name', ''), r.get('fandeck', ''), f"{L:.2f}", f"{a:.2f}", f"{b:.2f}", r['_pt']])
+            status.set(f"엑셀(CSV)로 저장했습니다: {path}")
+
+        self._bulk_read, self._bulk_put = read, put
+        read(False)
+
     def _nearest_pantone(self, L, a, b, n=1):
         allc = [(c, d) for d in pantone_decks() for c in d['colors']]
         # 빠른 1차 거르기(ΔE76) 뒤 ΔE2000 으로 다시 줄 세움

@@ -225,3 +225,17 @@ def online(stale=150):
             out.append((d["name"].rsplit("/", 1)[-1], f.get("name", {}).get("stringValue", "PC"),
                         f.get("ver", {}).get("stringValue", "")))
     return out
+
+
+def add_log(items, who, tries=5):
+    """Ver 0.42: 측정값을 공용 기록(rm200/meas_log, 최근 200개)에 덧붙임. 휴대폰 앱과 같은 문서.
+    다른 기기와 겹치면 다시 읽고 다시 씀. 성공하면 True."""
+    import random
+    for _ in range(tries):
+        cur, upd = get_doc("meas_log")
+        lst = cur if isinstance(cur, list) else []
+        lst = list(items) + lst
+        if put_doc("meas_log", lst[:200], upd, who):
+            return True
+        time.sleep(0.3 + random.random() * 0.5)
+    return False
