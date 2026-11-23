@@ -90,13 +90,10 @@ def safe_command(func, *args, retries=USB_RETRIES, delay=USB_DELAY, **kwargs):
             last_exc = e
             if not _is_usb_error(e):
                 raise
-            try:
-                rm.Disconnect()
-            except Exception:
-                pass
             time.sleep(delay)
             try:
-                rm.Connect()
+                with rm.LOCK:     # Ver 0.33: 다른 일이 통신하는 도중에 통로를 끊지 않게
+                    rm.Connect()  # (Connect 가 먼저 닫고 다시 엶)
             except Exception:
                 time.sleep(delay)
     raise RuntimeError(f"{retries}번 시도했지만 명령이 실행되지 않았습니다: {last_exc}")
@@ -2143,30 +2140,35 @@ class AdvisorApp(tk.Tk):
                 lcd = look()
                 if lcd:
                     keep(lcd, "0_다시켠뒤")
-                # Ver 0.30: 기계 "눈금 조정" 화면은 위쪽 빨간 측정 단추(키 8)를 기다림
-                for i, how in enumerate(('key8', 'key8', 'trigger')):
+                # Ver 0.32: 0.31 키 8 → 실제 기계 오류 0027. 0.29 옆 측정(7835)은 이 화면이 받지 않음.
+                # 이번에는 빨간 단추를 "누르고 있기(7) → 놓기(6)" 한 번만. 경고가 뜨면 바로 멈춤.
+                for i, how in enumerate(('red',)):
                     if not C.get('alive'):
                         break
                     if lcd and lcd_has_alert(lcd):
                         log("  기계 화면에 경고 창 → 멈춤(PC는 단추를 누르지 않음)")
                         C['why'] = 'alert'
                         break
-                    say(f"교정판을 재는 중입니다 ({i + 1}번째)...")
-                    if how == 'key8':
-                        log(f"  위 빨간 측정 단추(780f 키 8) {i + 1}번째")
-                        with rm.LOCK:
-                            rm.REMOTE_KEYS = True
-                            try:
-                                rm.PressKey(8)
-                            finally:
-                                rm.REMOTE_KEYS = False
-                    else:
-                        log(f"  측정 명령(7835) {i + 1}번째")
-                        with rm.LOCK:
-                            rm.TriggerMeasurement(self.aperture)
+                    say("교정판을 재는 중입니다(빨간 단추 누르기)...")
+                    log("  위 빨간 단추: 누르고 있기(780f 키 7) → 놓기(키 6)")
+                    with rm.LOCK:
+                        rm.REMOTE_KEYS = True
+                        try:
+                            r = rm.PressRedButton()
+                        finally:
+                            rm.REMOTE_KEYS = False
+                    log(f"  기계 대답 {r!r}")
+                    time.sleep(0.8)
+                    lcd = look()
+                    if lcd:
+                        keep(lcd, f"{i + 1}_바로뒤")
+                    if lcd and lcd_has_alert(lcd):
+                        log("  누른 바로 뒤 경고 창 → 멈춤")
+                        C['why'] = 'alert'
+                        break
                     t0 = time.time()
                     n = 0
-                    while time.time() - t0 < 15 and C.get('alive'):
+                    while time.time() - t0 < 20 and C.get('alive'):
                         time.sleep(1.5)
                         lcd = look()
                         n += 1
@@ -2213,9 +2215,9 @@ class AdvisorApp(tk.Tk):
                     self._set_status("0점 맞추기(교정)를 마쳤습니다")
                 else:
                     C['state'].set("PC로는 끝나지 않았습니다. PC는 더 누르지 않았습니다.\n"
-                                   "왼쪽 기계 화면 안내대로 기계 단추로 교정하시거나, "
-                                   "[단추로 직접 하기]에서 화면을 보며 눌러 주십시오."
-                                   + ("\n(기계 화면에 경고 창이 있어 멈췄습니다)" if C.get('why') == 'alert' else ""))
+                                   "손으로 하기: USB 선을 잠깐 빼고, 덮개를 닫은 채 "
+                                   "기계 위 빨간 단추를 한 번 누르십시오. 끝나면 다시 꽂으십시오."
+                                   + ("\n(기계 화면에 경고 창이 떠서 멈췄습니다)" if C.get('why') == 'alert' else ""))
                     C['lbl'].config(fg='#c62828')
                     C['go'].config(text="다시 해 보기", state=tk.NORMAL)
                     self._set_status("0점 맞추기가 끝나지 않았습니다")
@@ -2428,7 +2430,10 @@ class AdvisorApp(tk.Tk):
             err = None
             try:
                 with rm.LOCK:
-                    rm.PressKey(key)
+                    if key == 8:
+                        rm.PressRedButton()   # Ver 0.32: 누르고 있기 → 놓기
+                    else:
+                        rm.PressKey(key)
             except Exception as e:
                 err = e
             self.after(0, lambda: (self._rm_after_press(P), P['state'].set(
@@ -3339,6 +3344,7 @@ class AdvisorApp(tk.Tk):
 
                 deadline = time.time() + self.timeout
                 got = False
+                time.sleep(2.5)   # Ver 0.33: 기계가 재는 동안은 묻지 않음(바쁜 기계에 물으면 USB 시간 초과)
                 while time.time() < deadline:
                     try:
                         cnt = safe_command(rm.GetNumberOfEntries)
@@ -3986,12 +3992,25 @@ class AdvisorApp(tk.Tk):
         ttk.Button(top, text="고른 팬덱 끄기",
                    command=self._on_fd_deactivate).pack(side=tk.LEFT, padx=2)
 
+        # Ver 0.32: 라디오 단추 모양 — 켜짐 = 파란 동그라미, 꺼짐 = 빈 동그라미. 동그라미를 누르면 켜고 끔.
+        tk.Label(frame, text="동그라미를 누르면 켜고 끕니다.   ● 파란색 = 켜짐(측정할 때 찾아봄)   ○ 빈칸 = 꺼짐",
+                 font=('맑은 고딕', 11), fg='#1e3a5f').pack(anchor=tk.W, pady=(0, 4))
         list_frame = ttk.Frame(frame)
         list_frame.pack(fill=tk.BOTH, expand=True)
-
+        self._fd_imgs = self._fd_make_imgs()
+        st = ttk.Style(self)
+        st.configure('Fd.Treeview', rowheight=34, font=('맑은 고딕', 12))
+        st.configure('Fd.Treeview.Heading', font=('맑은 고딕', 11, 'bold'))
         scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL)
-        self.fd_list = tk.Listbox(list_frame, font=("Consolas", 10),
-                                  yscrollcommand=scrollbar.set)
+        self.fd_list = ttk.Treeview(list_frame, columns=('st',), style='Fd.Treeview',
+                                    selectmode='browse', yscrollcommand=scrollbar.set)
+        self.fd_list.heading('#0', text='  켜기/끄기   견본 책 이름', anchor='w')
+        self.fd_list.heading('st', text='상태', anchor='w')
+        self.fd_list.column('#0', width=520, stretch=True)
+        self.fd_list.column('st', width=220, stretch=False)
+        self.fd_list.tag_configure('on', foreground='#0d47a1')
+        self.fd_list.tag_configure('off', foreground='#9e9e9e')
+        self.fd_list.bind('<Button-1>', self._fd_click)
         scrollbar.config(command=self.fd_list.yview)
         self.fd_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -4011,51 +4030,89 @@ class AdvisorApp(tk.Tk):
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def _fd_make_imgs(self):
+        """라디오 단추 그림 (켜짐 파랑, 꺼짐 빈 동그라미)."""
+        from PIL import Image, ImageDraw
+        out = {}
+        for k in ('on', 'off', 'first'):
+            im = Image.new('RGBA', (88, 88), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+            if k == 'off':
+                d.ellipse((8, 8, 80, 80), outline=(150, 150, 150, 255), width=7, fill=(255, 255, 255, 255))
+            else:
+                d.ellipse((8, 8, 80, 80), outline=(30, 111, 217, 255), width=7, fill=(255, 255, 255, 255))
+                d.ellipse((24, 24, 64, 64), fill=(30, 111, 217, 255))
+            out[k] = ImageTk.PhotoImage(im.resize((24, 24), Image.LANCZOS))
+        return out
+
     def _on_fd_list(self, ok, val):
-        self.fd_list.delete(0, tk.END)
+        for iid in self.fd_list.get_children():
+            self.fd_list.delete(iid)
         if not ok:
             self.fd_status.set(f"오류: {val}")
             return
         items = val if isinstance(val, (list, tuple)) else ([] if val is None else [val])
         self._fd_names = []
+        self._fd_state = {}
         on = 0
         for it in items:
             if isinstance(it, (list, tuple)) and it:
                 name = str(it[0]); st = it[1] if len(it) > 1 else None
-                mark = {1: '● 켜짐', 2: '★ 먼저'}.get(st, '○ 꺼짐')
-                on += 1 if st in (1, 2) else 0
-                self.fd_list.insert(tk.END, f"  {mark}     {name}")
             else:
-                name = str(it)
-                self.fd_list.insert(tk.END, f"  {name}")
+                name = str(it); st = None
+            k = {1: 'on', 2: 'first'}.get(st, 'off')
+            on += 1 if k != 'off' else 0
+            word = {'on': '켜짐', 'first': '켜짐 (먼저 찾음)', 'off': '꺼짐'}[k]
+            self.fd_list.insert('', tk.END, iid=str(len(self._fd_names)), text='   ' + name,
+                                image=self._fd_imgs[k], values=(word,),
+                                tags=('off' if k == 'off' else 'on',))
             self._fd_names.append(name)
-        self.fd_status.set(f"기계 안 팬덱 {len(items)}개, 켜진 것 {on}개 (열 때 저절로 읽음, 고른 뒤 켜기·끄기)"
+            self._fd_state[name] = st
+        self.fd_status.set(f"기계 안 팬덱 {len(items)}개, 켜진 것 {on}개. 동그라미를 누르면 켜고 끕니다."
                            if items else "기계에서 팬덱 목록을 받지 못했습니다. [목록 새로 고침]을 눌러 보십시오.")
 
+    def _fd_click(self, e):
+        """동그라미(왼쪽 끝)를 누르면 켜짐↔꺼짐."""
+        iid = self.fd_list.identify_row(e.y)
+        if not iid or self.fd_list.identify_region(e.x, e.y) not in ('tree', 'cell'):
+            return
+        if e.x > 70:          # 이름 부분은 고르기만
+            return
+        self.fd_list.selection_set(iid)
+        name = self._selected_fd()
+        if not name:
+            return 'break'
+        st = getattr(self, '_fd_state', {}).get(name)
+        self._fd_set(name, st not in (1, 2))
+        return 'break'
+
+    def _fd_set(self, name, on):
+        if not self.connected:
+            return
+        ok, val = try_call(getattr(rm, "SetFandeckActive", None), name, 1 if on else 0)
+        self.fd_status.set(f"{'켜기' if on else '끄기'} {name}: " + ("됐습니다" if ok and val is not False else f"하지 못했습니다 {val}"))
+        self._on_fd_refresh()
+
     def _selected_fd(self):
-        sel = self.fd_list.curselection()
+        sel = self.fd_list.selection()
         if not sel:
             return None
         names = getattr(self, '_fd_names', [])
-        if sel[0] < len(names):
-            return names[sel[0]]
-        return self.fd_list.get(sel[0]).strip().split()[-1]
+        try:
+            return names[int(sel[0])]
+        except Exception:
+            return None
 
     def _on_fd_activate(self):
         name = self._selected_fd()
         if not name:
             return
-        ok, val = try_call(getattr(rm, "SetFandeckActive", None), name, True)
-        self.fd_status.set(f"켜기 {name}: " + ("OK" if ok else f"오류 {val}"))
-        self._on_fd_refresh()
+        self._fd_set(name, True)
 
     def _on_fd_deactivate(self):
         name = self._selected_fd()
         if not name:
             return
-        ok, val = try_call(getattr(rm, "SetFandeckActive", None), name, False)
-        self.fd_status.set(f"끄기 {name}: " + ("OK" if ok else f"오류 {val}"))
-        self._on_fd_refresh()
+        self._fd_set(name, False)
 
     def _on_fd_delete(self):
         name = self._selected_fd()
@@ -5427,6 +5484,7 @@ class AdvisorApp(tk.Tk):
 
                 deadline = time.time() + self.timeout
                 got = False
+                time.sleep(2.5)   # Ver 0.33: 기계가 재는 동안은 묻지 않음(바쁜 기계에 물으면 USB 시간 초과)
                 while time.time() < deadline:
                     if token != self._meas_token:
                         return
@@ -5449,7 +5507,7 @@ class AdvisorApp(tk.Tk):
                             raise
                         except Exception:
                             pass
-                    time.sleep(0.5)
+                    time.sleep(1.0)
                 if not got:
                     try:
                         cs = safe_command(rm.GetCalibrationState)

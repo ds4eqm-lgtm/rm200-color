@@ -42,6 +42,7 @@ OPEN_FILE = 0x7720
 
 # Ver 0.19: 원격 단추 창이 기계 화면을 보여 주는 동안만 True
 REMOTE_KEYS = False
+_RED = [False]
 # 확인 함수: GUI 가 messagebox.askyesno 로 바꿔 끼웁니다. 기본은 거절.
 confirm = lambda title, text: False
 
@@ -58,8 +59,10 @@ def _check(data):
             return
         raise BlockedCommand("기계 안 파일 쓰기는 이 프로그램에서 막혀 있습니다")
     if op == 0x780f:   # Ver 0.19: 기계 단추 대신 누르기(원격 단추 창에서만)
-        if REMOTE_KEYS and len(data) >= 4 and ((data[2] << 8) | data[3]) in (1, 2, 3, 4, 5, 8):
+        if REMOTE_KEYS and len(data) >= 4 and ((data[2] << 8) | data[3]) in (1, 2, 3, 4, 5, 6, 7, 8):
             return
+        if _RED[0] and len(data) >= 4 and ((data[2] << 8) | data[3]) in (6, 7):
+            return   # Ver 0.32: 빨간 단추 누르기 도중(다른 화면이 REMOTE_KEYS 를 꺼도 놓기까지 마침)
         raise BlockedCommand("기계 단추 누르기는 [기계 원격 단추] 창에서만 됩니다")
     if op in CONFIRM:
         if confirm("기계 설정 바꾸기",
@@ -74,19 +77,46 @@ def _check(data):
 class GuardedDevice:
     """실제 USB 장치를 감싸 쓰기 전에 명령을 검사합니다."""
 
+    # Ver 0.33: 원본은 대답을 1초만 기다림. 측정 직후처럼 기계가 바쁘면 1초를 넘겨
+    # "USB 시간 초과"가 나고, 늦게 온 그 대답이 통로에 남아 다음 명령이 앞 명령의 대답을 받음
+    # → 그 뒤로 계속 USB 오류. 이제 넉넉히 기다리고, 시간 초과가 났으면 다음 명령 전에 남은 대답을 비움.
+    READ_WAIT_MS = 5000
+
     def __init__(self, real):
         self._real = real
         self._pending = None
+        self._dirty = False
 
     def ctrl_transfer(self, *a, **k):
+        if self._dirty:
+            self._drain()
         return self._real.ctrl_transfer(*a, **k)
+
+    def _drain(self):
+        for _ in range(8):
+            try:
+                self._real.read(0x81, 4096, 150)
+            except Exception:
+                break
+        self._dirty = False
 
     def write(self, ep, data, *a, **k):
         _check(data)
+        if self._dirty:
+            self._drain()
         return self._real.write(ep, data, *a, **k)
 
-    def read(self, *a, **k):
-        return self._real.read(*a, **k)
+    def read(self, ep, n, timeout=None, *a, **k):
+        if ep == 0x81 and (timeout is None or timeout < self.READ_WAIT_MS):
+            timeout = self.READ_WAIT_MS
+        try:
+            return self._real.read(ep, n, timeout, *a, **k)
+        except Exception as e:
+            m = str(e).lower()
+            if 'timeout' in m or 'timed out' in m or getattr(e, 'errno', None) in (110, 60, 10060) \
+                    or getattr(e, 'backend_error_code', None) == -7:
+                self._dirty = True
+            raise
 
     def __getattr__(self, name):
         return getattr(self._real, name)
@@ -332,9 +362,23 @@ for _n in ("FetchFile", "DownloadFile", "ReadVersionsDotDat", "SaveScreenshot",
 # ---- Ver 0.19: 기계 단추 대신 누르기 (1=가운데 2=위 3=아래 4=왼쪽 5=오른쪽) ----
 def PressKey(key):
     key = int(key)
-    if key not in (1, 2, 3, 4, 5, 8):   # Ver 0.30: 8 = 위쪽 빨간 측정(캡처) 단추
+    if key not in (1, 2, 3, 4, 5, 6, 7, 8):   # 6/7 = 빨간 단추 놓기/누르고 있기, 8 = 캡처
         raise BlockedCommand("가운데·위·아래·왼쪽·오른쪽·측정 단추만 누를 수 있습니다")
     return _lib.CommandBool(b"\x78\x0f" + key.to_bytes(2, "big"))
+
+
+# Ver 0.32: 위 빨간 측정 단추를 사람이 누르는 것처럼 "누르고 있기(7) → 놓기(6)".
+# (0.31 의 키 8 은 실제 기계에서 오류 0027 프로토콜 오류가 남: 키 8 은 미리보기 중에만 받음)
+def PressRedButton(hold=0.6):
+    import time as _t
+    _RED[0] = True
+    try:
+        a = PressKey(7)
+        _t.sleep(hold)
+        b = PressKey(6)
+    finally:
+        _RED[0] = False
+    return a, b
 
 
 GenerateKeyboardEvent = PressKey
