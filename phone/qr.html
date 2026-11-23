@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RM200 측색계 QR</title>
+<style>body{margin:0;background:#f4f6fa;font-family:"Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:#1d2433}
+.w{display:flex;flex-wrap:wrap;gap:24px;justify-content:center;padding:28px 16px}
+.c{background:#fff;border:1px solid #dde3ec;border-radius:16px;padding:20px;text-align:center;width:340px;max-width:100%}
+h2{margin:0 0 10px;font-size:19px}.u{font-size:13px;color:#5b6475;word-break:break-all;margin-top:8px}
+h1{text-align:center;font-size:20px;margin:24px 16px 0}</style></head>
+<body><h1>휴대폰 카메라로 찍으면 바로 열립니다</h1><div class="w" id="w"></div>
+<script src="qrcode.js"></script>
+<script>
+const base = location.href.split('#')[0].replace(/qr\.html.*$/, '');
+const list = [['휴대폰·태블릿 앱', base], ['PC 프로그램 받기', 'https://github.com/ds4eqm-lgtm/rm200-color']];
+for (const [t, u] of list){
+  const q = qrcode(0, 'M'); q.addData(u); q.make();
+  const d = document.createElement('div'); d.className = 'c';
+  d.innerHTML = '<h2>' + t + '</h2>' + q.createSvgTag({cellSize: 7, margin: 4, scalable: true}) + '<div class="u">' + u + '</div>';
+  d.querySelector('svg').style.width = '280px'; d.querySelector('svg').style.height = '280px';
+  document.getElementById('w').appendChild(d);
+}
+</script></body></html>
