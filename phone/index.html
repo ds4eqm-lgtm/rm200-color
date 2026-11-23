@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>RM200 측색계 앱</title>
+<meta name="theme-color" content="#1e3a5f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="RM200 측색계">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon192.png">
+<link rel="apple-touch-icon" href="icon192.png">
+<style>
+:root{--bg:#f4f6fa;--card:#fff;--ink:#1d2433;--sub:#5b6475;--blue:#1e6fd9;--navy:#1e3a5f;--red:#c62828;--green:#2e7d32;--line:#dde3ec}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+header{position:sticky;top:0;z-index:5;background:var(--navy);color:#fff;padding:10px 16px 8px}
+.hrow{display:flex;align-items:center;gap:10px}
+.hrow b{font-size:17px}
+#ver{font-size:12px;background:rgba(255,255,255,.15);padding:2px 7px;border-radius:8px}
+#led{margin-left:auto;font-size:13px;display:flex;align-items:center;gap:6px;white-space:nowrap}
+#led i{width:11px;height:11px;border-radius:50%;background:#999;display:inline-block}
+#online{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;min-height:22px}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;background:rgba(255,255,255,.14);padding:3px 9px;border-radius:12px}
+.chip i{width:8px;height:8px;border-radius:50%;background:#66bb6a;animation:bl 1.6s infinite}
+@keyframes bl{50%{opacity:.25}}
+nav{display:flex;gap:6px;padding:10px 16px 0;max-width:640px;margin:0 auto;overflow-x:auto}
+nav button{flex:1 0 auto;padding:10px 12px;font-size:15px;font-weight:700;border-radius:10px;background:#e3e9f3;color:var(--navy)}
+nav button.on{background:var(--blue);color:#fff}
+main{padding:12px 16px 20px;max-width:640px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+button{font:inherit;border:0;border-radius:12px;cursor:pointer}
+.big{width:100%;padding:18px;font-size:20px;font-weight:700;color:#fff;background:var(--blue)}
+.big:disabled{background:#9db8e0}
+.sub{width:100%;padding:12px;font-size:16px;font-weight:700;background:#e8eef8;color:var(--navy);margin-top:10px}
+.msg{font-size:15px;color:var(--sub);margin:10px 2px 0;min-height:22px;line-height:1.5}
+.msg.err{color:var(--red);font-weight:700}
+.sw{height:140px;border-radius:12px;border:1px solid var(--line);background:#ddd}
+.code{font-size:25px;font-weight:800;margin:12px 0 2px;word-break:break-all}
+.dim{font-size:14px;color:var(--sub)}
+.row{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:15px}
+.row .c{width:32px;height:32px;border-radius:7px;border:1px solid var(--line);flex:none}
+.row small{color:var(--sub);margin-left:auto;text-align:right;white-space:nowrap}
+.row.tap{cursor:pointer}
+#cal{display:none;border-color:#f2b8b5;background:#fff6f6}
+#cal h3{margin:0 0 6px;color:var(--red);font-size:18px}
+#cal p{margin:0;font-size:15px;line-height:1.6}
+.note{font-size:13px;color:var(--sub);line-height:1.6}
+input[type=search],input[type=text]{width:100%;font:inherit;font-size:17px;padding:12px;border:1px solid var(--line);border-radius:10px}
+h4{margin:0 0 8px;font-size:16px}
+.pill{display:inline-block;font-size:12px;padding:2px 8px;border-radius:9px;background:#e8eef8;color:var(--navy);margin-left:6px}
+footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
+.share{display:flex;flex-wrap:wrap;gap:8px}
+.share button{flex:1 1 30%;padding:11px 6px;font-size:14px;font-weight:700;color:#fff}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;display:none;z-index:20;max-width:90%}
+#sheet{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:flex-end;justify-content:center;z-index:15}
+#sheet .in{background:#fff;width:100%;max-width:520px;border-radius:16px 16px 0 0;padding:20px 18px 26px}
+#sheet label{display:flex;gap:10px;align-items:center;font-size:16px;padding:9px 0}
+#sheet input{width:20px;height:20px}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<header>
+  <div class="hrow"><span id="ver"></span><b>RM200 측색계 앱</b><span id="led"><i id="dot"></i><span id="ledt">기계 없음</span></span></div>
+  <div id="online"></div>
+</header>
+<nav>
+  <button data-t="meas" class="on">측정</button>
+  <button data-t="log">함께 본 기록</button>
+  <button data-t="pal">내 팔레트</button>
+  <button data-t="find">팬톤 찾기</button>
+</nav>
+<main>
+<!-- 측정 -->
+<section id="t-meas">
+  <div class="card" id="nousb" style="display:none">
+    <b>이 기기·브라우저에서는 기계를 직접 연결할 수 없습니다.</b>
+    <p class="note" style="margin:6px 0 0">기계 연결은 안드로이드 크롬, 맥·윈도우의 크롬·엣지·웨일에서 됩니다. 아이폰·아이패드, 사파리, 파이어폭스, 삼성 인터넷은 막혀 있습니다. 대신 다른 기기에서 잰 색이 [함께 본 기록]에 바로 나오고, 내 팔레트와 팬톤 찾기는 모두 됩니다.</p>
+  </div>
+  <div class="card" id="usbcard">
+    <button class="big" id="go">기계 연결</button>
+    <div class="msg" id="msg">RM200을 USB 선으로 꽂고 [기계 연결]을 누르십시오. (휴대폰은 USB-C OTG 젠더)</div>
+  </div>
+  <div class="card" id="cal">
+    <h3>0점 맞추기(교정)가 필요합니다</h3>
+    <p>덮개를 닫아 흰 교정판 위에 두고 기계 위쪽 빨간 단추를 한 번 누르십시오. 끝나면 이 칸이 저절로 사라집니다.</p>
+  </div>
+  <div class="card hidden" id="res">
+    <div class="sw" id="sw"></div>
+    <div class="code" id="code"></div>
+    <div class="dim" id="deck"></div>
+    <div class="dim" id="lab"></div>
+    <div id="more" style="margin-top:10px"></div>
+    <div id="own" style="margin-top:12px"></div>
+  </div>
+</section>
+<!-- 함께 본 기록 -->
+<section id="t-log" class="hidden">
+  <div class="card"><h4>모든 기기에서 잰 색 <span class="pill" id="logn"></span></h4><div id="log"></div>
+  <p class="note">PC 프로그램과 이 앱에서 잰 색이 함께 쌓입니다(최근 200개). 눌러서 우리 물건 중 가까운 것을 봅니다.</p></div>
+</section>
+<!-- 내 팔레트 -->
+<section id="t-pal" class="hidden">
+  <div class="card"><h4>내 팔레트 <span class="pill" id="paln"></span></h4>
+  <input type="search" id="palq" placeholder="이름으로 찾기 (예: LVT, 벽지)">
+  <div id="pal" style="margin-top:8px"></div>
+  <p class="note">PC 프로그램의 내 팔레트와 같은 자료입니다(공용 저장소). 고치는 것은 PC 프로그램에서 합니다.</p></div>
+</section>
+<!-- 팬톤 찾기 -->
+<section id="t-find" class="hidden">
+  <div class="card"><h4>팬톤 번호로 찾기</h4>
+  <input type="search" id="pq" placeholder="예: 17-3938, 179 C, 2925">
+  <div id="pres" style="margin-top:8px"></div></div>
+</section>
+<div class="card note">
+  <button class="sub" id="inst" style="margin-top:0">홈 화면(바탕화면)에 바로가기</button>
+</div>
+</main>
+<footer>
+  <div class="card">
+    <b style="font-size:15px">주소 나눠 주기</b>
+    <div class="share" style="margin-top:10px">
+      <button style="background:#455a64" data-s="copy">주소 복사</button>
+      <button style="background:#c9a800" data-s="kakao">카카오톡</button>
+      <button style="background:#6c3fd1" data-s="flow">플로우</button>
+      <button style="background:#2e7d32" data-s="sms">문자</button>
+      <button style="background:#1e6fd9" data-s="other">다른 앱</button>
+    </div>
+  </div>
+</footer>
+<div id="sheet"><div class="in">
+  <h3 style="margin:0 0 6px">설치하시겠습니까?</h3>
+  <div class="note" id="shnote"></div>
+  <label><input type="checkbox" id="c1" checked>홈 화면(바탕화면)에 바로가기</label>
+  <label><input type="checkbox" id="c2" checked>시작 화면(앱 목록)에 넣기</label>
+  <label><input type="checkbox" id="c3">작업 표시줄(독)에 고정 — 안내만</label>
+  <button class="big" id="shok" style="margin-top:8px">설치</button>
+  <button class="sub" id="shno">닫기</button>
+</div></div>
+<div id="toast"></div>
+<script>
+'use strict';
+const VER = '0.1';
+const VID = 0x0765, PID = 0x6001;
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+$('ver').textContent = 'Ver ' + VER;
+function toast(t){ const e = $('toast'); e.textContent = t; e.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => e.style.display = 'none', 2600); }
+const UA = navigator.userAgent;
+const IS_IOS = /iPhone|iPad|iPod/i.test(UA) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const IS_ANDROID = /Android/i.test(UA);
+const KAKAO = /KAKAOTALK/i.test(UA);
+
+// ---------------------------------------------------------------- 탭
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
+  for (const t of ['meas','log','pal','find']) $('t-' + t).classList.toggle('hidden', t !== b.dataset.t);
+  if (b.dataset.t === 'log') loadLog();
+  if (b.dataset.t === 'pal') loadPal();
+});
+
+// ---------------------------------------------------------------- 색 계산
+function lab2rgb(L, a, b){
+  let y = (L + 16) / 116, x = a / 500 + y, z = y - b / 200;
+  const f = t => t**3 > 0.008856 ? t**3 : (t - 16/116) / 7.787;
+  x = 0.95047 * f(x); y = f(y); z = 1.08883 * f(z);
+  const r = x*3.2406 + y*-1.5372 + z*-0.4986, g = x*-0.9689 + y*1.8758 + z*0.0415, bb = x*0.0557 + y*-0.2040 + z*1.0570;
+  const c = v => Math.round(255 * Math.min(1, Math.max(0, v > 0.0031308 ? 1.055 * v**(1/2.4) - 0.055 : 12.92 * v)));
+  return `rgb(${c(r)},${c(g)},${c(bb)})`;
+}
+function de2000(l1,a1,b1,l2,a2,b2){   // PC 프로그램과 같은 CIEDE2000
+  const rad = Math.PI/180, deg = 180/Math.PI;
+  const C1 = Math.hypot(a1,b1), C2 = Math.hypot(a2,b2), Cb = (C1+C2)/2;
+  const G = 0.5*(1-Math.sqrt(Cb**7/(Cb**7+25**7)));
+  const a1p = (1+G)*a1, a2p = (1+G)*a2, C1p = Math.hypot(a1p,b1), C2p = Math.hypot(a2p,b2);
+  const h1 = C1p ? ((Math.atan2(b1,a1p)*deg)+360)%360 : 0, h2 = C2p ? ((Math.atan2(b2,a2p)*deg)+360)%360 : 0;
+  const dL = l2-l1, dC = C2p-C1p; let dh = h2-h1;
+  if (C1p*C2p === 0) dh = 0; else if (dh > 180) dh -= 360; else if (dh < -180) dh += 360;
+  const dH = 2*Math.sqrt(C1p*C2p)*Math.sin(dh/2*rad);
+  const Lb = (l1+l2)/2, Cbp = (C1p+C2p)/2;
+  let hb; if (C1p*C2p === 0) hb = h1+h2; else if (Math.abs(h1-h2) <= 180) hb = (h1+h2)/2; else hb = h1+h2 < 360 ? (h1+h2+360)/2 : (h1+h2-360)/2;
+  const T = 1-0.17*Math.cos((hb-30)*rad)+0.24*Math.cos(2*hb*rad)+0.32*Math.cos((3*hb+6)*rad)-0.20*Math.cos((4*hb-63)*rad);
+  const SL = 1+0.015*(Lb-50)**2/Math.sqrt(20+(Lb-50)**2), SC = 1+0.045*Cbp, SH = 1+0.015*Cbp*T;
+  const dt = 30*Math.exp(-(((hb-275)/25)**2)), RC = 2*Math.sqrt(Cbp**7/(Cbp**7+25**7)), RT = -Math.sin(2*dt*rad)*RC;
+  return Math.sqrt((dL/SL)**2+(dC/SC)**2+(dH/SH)**2+RT*(dC/SC)*(dH/SH));
+}
+
+// ---------------------------------------------------------------- 팬톤 견본
+let PT = null, PTL = null;
+const norm = s => String(s).toUpperCase().replace(/PANTONE|®|\s|-/g, '');
+async function pantone(){
+  if (PT) return PT;
+  const js = await (await fetch('pantone.json')).json();
+  PT = new Map(); PTL = [];
+  for (const d of js.decks) for (const c of d.c){
+    const it = {name: c[0], lab: [c[1],c[2],c[3]], deck: d.k || d.n};
+    PT.set(norm(c[0]), it); PTL.push(it);
+  }
+  return PT;
+}
+function findPT(name){
+  // 기계가 주는 이름 그대로 → 안 되면 번호 부분만(예: '16-4703 TCX Ghost Gray' → '16-4703 TCX')
+  if (!PT) return null;
+  const w = String(name).replace(/PANTONE®?/i, '').trim().split(/\s+/);
+  for (let n = w.length; n >= 1; n--){ const h = PT.get(norm(w.slice(0, n).join(' '))); if (h) return h; }
+  return null;
+}
+$('pq').oninput = async () => {
+  const q = norm($('pq').value);
+  if (q.length < 2){ $('pres').innerHTML = ''; return; }
+  await pantone();
+  const hits = PTL.filter(x => norm(x.name).includes(q)).slice(0, 30);
+  $('pres').innerHTML = hits.length ? hits.map(x => `<div class="row tap" data-l="${x.lab.join(',')}" data-n="${esc(x.name)}"><span class="c" style="background:${lab2rgb(...x.lab)}"></span>PANTONE ${esc(x.name)}<small>${esc(x.deck)}</small></div>`).join('') : '<div class="dim">찾지 못했습니다</div>';
+};
+$('pres').onclick = e => { const r = e.target.closest('.row'); if (r) ownNear(r.dataset.n, r.dataset.l.split(',').map(Number), $('pres'), r); };
+
+// ---------------------------------------------------------------- 공용 저장소 (PC 프로그램과 같은 곳, 토큰 없음)
+const FS = 'https://firestore.googleapis.com/v1/projects/serogochim-inventory/databases/(default)/documents';
+const KEY = 'AIzaSyCNpACKBrRc4e0aZcy4yindQPIHSMcOp50';
+async function getDoc(path){
+  const r = await fetch(`${FS}/${path}?key=${KEY}`, {cache:'no-store'});
+  if (r.status === 404) return [null, null];
+  if (!r.ok) throw new Error('공용 저장소 읽기 실패 ' + r.status);
+  const js = await r.json();
+  const raw = js.fields && js.fields.json && js.fields.json.stringValue;
+  return [raw ? JSON.parse(raw) : null, js.updateTime];
+}
+async function putDoc(path, data, prev){
+  const cond = prev ? `&currentDocument.updateTime=${encodeURIComponent(prev)}` : '&currentDocument.exists=false';
+  const body = {fields:{json:{stringValue: JSON.stringify(data)}, by:{stringValue: myName()}, t:{integerValue: String(Math.floor(Date.now()/1000))}}};
+  const r = await fetch(`${FS}/${path}?key=${KEY}${cond}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  if (r.ok) return true;
+  if ([400,409,412].includes(r.status)) return false;
+  throw new Error('공용 저장소 쓰기 실패 ' + r.status);
+}
+async function addLog(item){
+  // 기록 문서 하나(rm200/meas_log)에 덧붙임. 다른 기기와 겹치면 다시 읽고 다시 씀.
+  for (let i = 0; i < 5; i++){
+    const [cur, upd] = await getDoc('rm200/meas_log');
+    const list = Array.isArray(cur) ? cur : [];
+    list.unshift(item);
+    if (await putDoc('rm200/meas_log', list.slice(0, 200), upd)) return true;
+    await sleep(300 + Math.random()*500);
+  }
+  return false;
+}
+async function loadLog(){
+  try {
+    const [list] = await getDoc('rm200/meas_log');
+    const L = Array.isArray(list) ? list : [];
+    $('logn').textContent = L.length + '개';
+    $('log').innerHTML = L.length ? L.map(x => `<div class="row tap" data-l="${(x.lab||[]).join(',')}" data-n="${esc(x.name)}"><span class="c" style="background:${x.lab ? lab2rgb(...x.lab) : '#ddd'}"></span><div>${esc(x.name)}<div class="dim">${esc(x.who)} · ${esc(x.deck||'')}</div></div><small>${esc(x.when)}</small></div>`).join('') : '<div class="dim">아직 잰 색이 없습니다</div>';
+  } catch(e){ $('log').innerHTML = '<div class="dim">공용 저장소에 연결하지 못했습니다(인터넷 확인)</div>'; }
+}
+$('log').onclick = e => { const r = e.target.closest('.row'); if (r && r.dataset.l) ownNear(r.dataset.n, r.dataset.l.split(',').map(Number), $('log'), r); };
+
+// 내 팔레트(PC 프로그램과 같은 문서 rm200/palettes: {팔레트: {'이름': [L,a,b]}})
+let PAL = null;
+async function palettes(){
+  if (PAL) return PAL;
+  try { const [m] = await getDoc('rm200/palettes'); PAL = m || {}; } catch(e){ PAL = {}; }
+  return PAL;
+}
+function palItems(m){
+  const out = [];
+  for (const [p, ents] of Object.entries(m || {})) for (const [k, v] of Object.entries(ents || {}))
+    if (Array.isArray(v) && v.length === 3) out.push({pal: p, name: k.split('\u0001')[0], lab: v});
+  return out;
+}
+async function loadPal(){
+  const items = palItems(await palettes());
+  $('paln').textContent = items.length + '색';
+  const q = $('palq').value.trim().toLowerCase();
+  const show = items.filter(x => !q || (x.pal + ' ' + x.name).toLowerCase().includes(q)).slice(0, 200);
+  $('pal').innerHTML = show.length ? show.map(x => `<div class="row"><span class="c" style="background:${lab2rgb(...x.lab)}"></span><div>${esc(x.name)}<div class="dim">${esc(x.pal)}</div></div><small>L ${(+x.lab[0]).toFixed(1)}</small></div>`).join('')
+    : '<div class="dim">' + (items.length ? '찾지 못했습니다' : '아직 공용 저장소에 내 팔레트가 없습니다. PC 프로그램에서 팔레트를 저장하면 여기에도 나옵니다.') + '</div>';
+}
+$('palq').oninput = loadPal;
+async function ownNear(name, lab, box, after){
+  // 우리 물건에서 찾기: 내 팔레트에서 가장 가까운 5개 (색 차이 ΔE2000)
+  const items = palItems(await palettes());
+  const old = box.querySelector('.near'); if (old) old.remove();
+  const d = document.createElement('div'); d.className = 'near'; d.style.cssText = 'padding:6px 0 10px 42px';
+  if (!items.length){ d.innerHTML = '<div class="dim">내 팔레트가 비어 있어 우리 물건을 찾을 수 없습니다</div>'; }
+  else {
+    const near = items.map(x => ({...x, de: de2000(...lab, ...x.lab)})).sort((a,b) => a.de - b.de).slice(0, 5);
+    d.innerHTML = '<div class="dim">우리 물건 중 가까운 것</div>' + near.map(x => `<div class="row"><span class="c" style="background:${lab2rgb(...x.lab)}"></span>${esc(x.name)}<small>ΔE ${x.de.toFixed(2)}<br>${esc(x.pal)}</small></div>`).join('');
+  }
+  after.after(d);
+}
+
+// ---------------------------------------------------------------- 지금 켜진 기기 (PC 프로그램과 같은 목록)
+const PID_ = (() => { let v = null; try { v = localStorage.getItem('rm200_pid'); } catch(e){} if (!v){ v = 'app' + Math.random().toString(36).slice(2,10); try { localStorage.setItem('rm200_pid', v); } catch(e){} } return v; })();
+function myName(){
+  let n = null; try { n = localStorage.getItem('rm200_name'); } catch(e){}
+  return n || (IS_IOS ? '아이폰·아이패드' : IS_ANDROID ? '안드로이드' : /Mac/.test(UA) ? '맥' : /Windows/.test(UA) ? '윈도우' : '기기') + ' 앱';
+}
+async function beat(){
+  try {
+    const body = {fields:{name:{stringValue: myName()}, ver:{stringValue: 'app ' + VER}, t:{integerValue: String(Math.floor(Date.now()/1000))}}};
+    await fetch(`${FS}/rm200_presence/${PID_}?key=${KEY}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    const r = await fetch(`${FS}/rm200_presence?key=${KEY}&pageSize=50`, {cache:'no-store'});
+    const js = await r.json(); const now = Date.now()/1000; const out = [];
+    for (const d of (js.documents || [])){
+      const f = d.fields || {}; const t = +((f.t||{}).integerValue || 0);
+      if (now - t < 150) out.push({id: d.name.split('/').pop(), name: (f.name||{}).stringValue || 'PC', ver: (f.ver||{}).stringValue || ''});
+    }
+    $('online').innerHTML = out.map(x => `<span class="chip"><i></i>${esc(x.name)}${x.id === PID_ ? ' (이 기기)' : ''} ${esc(x.ver)}</span>`).join('');
+  } catch(e){}
+}
+beat(); setInterval(() => { if (!document.hidden) beat(); }, 30000);
+addEventListener('pagehide', () => { try { fetch(`${FS}/rm200_presence/${PID_}?key=${KEY}`, {method:'DELETE', keepalive:true}); } catch(e){} });
+// 5초 누르기: 이 기기 이름 바꾸기 (대표님 프로그램 공통 규칙)
+(() => {
+  let t = null;
+  const el = $('online');
+  const start = e => { if (!e.target.closest('.chip') || !e.target.closest('.chip').textContent.includes('(이 기기)')) return; t = setTimeout(() => {
+    const v = prompt('이 기기 이름', myName()); if (v && v.trim()){ try { localStorage.setItem('rm200_name', v.trim().slice(0, 30)); } catch(x){} beat(); }
+  }, 5000); };
+  const stop = () => clearTimeout(t);
+  el.addEventListener('pointerdown', start); el.addEventListener('pointerup', stop); el.addEventListener('pointerleave', stop);
+})();
+
+// ---------------------------------------------------------------- 기계 USB (크롬 계열 WebUSB)
+// PC 프로그램(rm200lib)과 같은 통신: 길이 알림(제어 0x97) → 명령(끝점 2) → 대답(끝점 1).
+// 기계로는 읽기와 측정(7835)만 보냅니다. 설정 바꾸기·지우기·단추 누르기는 이 앱에 없습니다.
+let dev = null, bufsize = 64, busy = false, dirty = false;
+const ALLOWED = new Set(['7811','7819','7835','7823','7828','782e']);
+const hex = b => Array.from(b, x => x.toString(16).padStart(2,'0')).join('');
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('대답 시간 초과')), ms))]);
+async function drain(){ for (let i = 0; i < 4; i++){ try { await withTimeout(dev.transferIn(1, 4096), 200); } catch(e){ break; } } dirty = false; }
+async function cmd(bytes){
+  if (!dev) throw new Error('연결 안 됨');
+  const data = new Uint8Array(bytes);
+  if (!ALLOWED.has(hex(data.slice(0,2)))) throw new Error('막힌 명령');
+  if (dirty) await drain();
+  const n = data.length;
+  await dev.controlTransferOut({requestType:'vendor', recipient:'device', request:0x97, value:(n>>16)&0xffff, index:n&0xffff});
+  await dev.transferOut(2, data);
+  let r;
+  try { r = await withTimeout(dev.transferIn(1, Math.max(bufsize, 64)), 5000); } catch(e){ dirty = true; throw e; }
+  const b = new Uint8Array(r.data.buffer, r.data.byteOffset, r.data.byteLength);
+  return (b.length >= 4 && b[2] === 0x33 && b[3] === 0x01) ? b.slice(4) : null;
+}
+const u16 = b => b && b.length >= 2 ? (b[0]<<8)|b[1] : null;
+const u32 = b => b && b.length >= 4 ? b[0]*16777216 + (b[1]<<16) + (b[2]<<8) + b[3] : null;
+async function openDev(d){
+  dev = d;
+  await dev.open();
+  if (!dev.configuration || dev.configuration.configurationValue !== 1) await dev.selectConfiguration(1);
+  await dev.claimInterface(0);
+  const s = u32(await cmd([0x78,0x11])); if (s) bufsize = s;
+}
+function utf16z(b, pos){ let e = pos; while (e < b.length-1 && !(b[e] === 0 && b[e+1] === 0)) e += 2; let s = ''; for (let i = pos; i < e; i += 2) s += String.fromCharCode(b[i] | (b[i+1]<<8)); return [s, e+2]; }
+function parseMulti(b){
+  // rm200lib GetMultiColorCmd: 00 01, 개수 2바이트, [6바이트, 글자 5개(팬덱·색·쪽·줄·칸), 1바이트]...
+  const out = []; if (!b) return out; let pos = 4;
+  while (pos < b.length){ pos += 6; const f = []; for (let i = 0; i < 5; i++){ const [s, p] = utf16z(b, pos); f.push(s); pos = p; } pos += 1; if (f[1]) out.push({deck: f[0], name: f[1], page: f[2]}); }
+  return out;
+}
+async function calib(){
+  const cs = await cmd([0x78,0x28]); const left = u32(await cmd([0x78,0x2e]));
+  const okLeft = left !== null && left > 0 && left < 2**31;
+  return {ok: okLeft, left, cs: cs ? cs[0] : null};
+}
+function led(state, text){ $('dot').style.background = {ok:'#43a047', work:'#ffb300', off:'#999', err:'#e53935'}[state]; $('ledt').textContent = text; }
+function say(t, err){ $('msg').textContent = t; $('msg').className = 'msg' + (err ? ' err' : ''); }
+let calTimer = null;
+async function watchCal(){
+  clearTimeout(calTimer);
+  if (!dev) return;
+  if (busy){ calTimer = setTimeout(watchCal, 2000); return; }
+  try {
+    const c = await calib();
+    if (c.ok){ if ($('cal').style.display === 'block') say(`0점 맞추기 끝 (${Math.floor(c.left/60)}분 남음). [측정]을 누르십시오.`); $('cal').style.display = 'none'; led('ok', `연결됨 · 교정 ${Math.floor(c.left/60)}분`); calTimer = setTimeout(watchCal, 30000); return; }
+    $('cal').style.display = 'block'; led('work', '교정 필요');
+  } catch(e){}
+  calTimer = setTimeout(watchCal, 2000);
+}
+async function connected(){ led('ok', '연결됨'); $('go').textContent = '측정'; say('연결했습니다. 기계를 잴 곳에 대고 [측정]을 누르십시오.'); watchCal(); }
+async function measure(){
+  if (busy) return;
+  busy = true; $('go').disabled = true; led('work', '재는 중');
+  try {
+    const c = await calib();
+    if (!c.ok){ $('cal').style.display = 'block'; say('먼저 0점 맞추기를 하십시오(기계 빨간 단추).', true); return; }
+    const before = u16(await cmd([0x78,0x19])) || 0;
+    say('재는 중입니다. 기계를 대고 움직이지 마십시오...');
+    await cmd([0x78,0x35,0x02]);
+    await sleep(2500);
+    let got = false;
+    for (let i = 0; i < 25 && !got; i++){ const n = u16(await cmd([0x78,0x19])); if (n !== null && n > before) got = true; else await sleep(1000); }
+    if (!got){ say('기계가 측정하지 않았습니다. 기계 화면을 확인하십시오.', true); return; }
+    await sleep(600);
+    const list = parseMulti(await cmd([0x78,0x23]));
+    if (!list.length){ say('기계가 고른 팬톤 색을 받지 못했습니다. 다시 재 보십시오.', true); return; }
+    await show(list);
+    say('다 쟀습니다. 다시 재려면 [측정]을 누르십시오.');
+  } catch(e){
+    say('기계와 주고받지 못했습니다: ' + e.message + ' (선을 다시 꽂고 [기계 연결])', true); led('err', '오류');
+  } finally { busy = false; $('go').disabled = false; if (dev) watchCal(); }
+}
+async function show(list){
+  await pantone().catch(() => null);
+  const top = list[0]; const hit = findPT(top.name);
+  $('res').classList.remove('hidden');
+  $('sw').style.background = hit ? lab2rgb(...hit.lab) : '#ddd';
+  $('code').textContent = top.name.replace('PANTONE® ', 'PANTONE ');
+  $('deck').textContent = top.deck + (top.page ? ` · ${top.page}` : '');
+  $('lab').textContent = hit ? `견본 Lab  L ${hit.lab[0]}  a ${hit.lab[1]}  b ${hit.lab[2]}` : '';
+  const seen = new Set([norm(top.name)]); const more = [];
+  for (const it of list.slice(1)){ const k = norm(it.name); if (seen.has(k)) continue; seen.add(k); const h = findPT(it.name);
+    more.push(`<div class="row"><span class="c" style="background:${h ? lab2rgb(...h.lab) : '#ddd'}"></span>${esc(it.name)}<small>${esc(it.deck)}</small></div>`); }
+  $('more').innerHTML = more.length ? '<div class="dim">다른 후보</div>' + more.slice(0, 5).join('') : '';
+  $('own').innerHTML = '';
+  if (hit){
+    const items = palItems(await palettes());
+    if (items.length){
+      const near = items.map(x => ({...x, de: de2000(...hit.lab, ...x.lab)})).sort((a,b) => a.de - b.de).slice(0, 5);
+      $('own').innerHTML = '<h4>우리 물건 중 가까운 것</h4>' + near.map(x => `<div class="row"><span class="c" style="background:${lab2rgb(...x.lab)}"></span>${esc(x.name)}<small>ΔE ${x.de.toFixed(2)}<br>${esc(x.pal)}</small></div>`).join('');
+    }
+  }
+  const t = new Date();
+  addLog({name: top.name, deck: top.deck, lab: hit ? hit.lab : null, who: myName(), when: `${t.getMonth()+1}/${t.getDate()} ${t.toTimeString().slice(0,5)}`, t: Math.floor(t/1000)})
+    .catch(() => toast('공용 기록에 올리지 못했습니다(인터넷 확인)'));
+}
+$('go').onclick = async () => {
+  if (!('usb' in navigator)){ $('nousb').style.display = 'block'; say('이 브라우저는 기계 연결이 안 됩니다. 아래 다른 칸은 모두 됩니다.', true); return; }
+  if (dev) return measure();
+  try {
+    led('work', '연결 중');
+    const d = await navigator.usb.requestDevice({filters:[{vendorId:VID, productId:PID}]});
+    await openDev(d); connected();
+  } catch(e){
+    dev = null; led('off', '기계 없음');
+    say(e.name === 'NotFoundError' ? '기계를 고르지 않았습니다. 선이 꽂혀 있는지 보고 다시 누르십시오.'
+      : e.name === 'SecurityError' || /claim|access/i.test(e.message) ? '다른 프로그램(PC의 측색계)이 기계를 쓰는 중이거나 드라이버가 막고 있습니다. 그 프로그램을 닫고 다시 누르십시오.'
+      : '연결하지 못했습니다: ' + e.message, true);
+  }
+};
+if ('usb' in navigator){
+  navigator.usb.addEventListener('disconnect', ev => { if (dev && ev.device === dev){ dev = null; clearTimeout(calTimer); $('cal').style.display = 'none'; led('off', '기계 없음'); $('go').textContent = '기계 연결'; say('기계가 빠졌습니다. 다시 꽂으면 저절로 연결합니다.', true); } });
+  navigator.usb.addEventListener('connect', ev => { if (!dev && ev.device.vendorId === VID) openDev(ev.device).then(connected).catch(() => { dev = null; }); });
+  navigator.usb.getDevices().then(ds => { const d = ds.find(x => x.vendorId === VID && x.productId === PID); if (d && !dev) openDev(d).then(connected).catch(() => { dev = null; }); });
+} else {
+  $('nousb').style.display = 'block'; $('usbcard').style.display = 'none';
+}
+
+// ---------------------------------------------------------------- 바로가기 설치 (대표님 프로그램 공통 규칙)
+let bip = null;
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); bip = e; });
+addEventListener('appinstalled', () => toast('설치했습니다. 홈 화면(바탕화면)의 아이콘으로 여십시오.'));
+$('inst').onclick = () => {
+  $('shnote').textContent = IS_IOS ? (KAKAO ? '카카오톡 안에서는 설치가 안 됩니다. 사파리로 엽니다.' : '아이폰·아이패드는 설치 파일(프로필)을 받아 [설정]에서 [설치]를 누르면 홈 화면에 아이콘이 생깁니다.')
+    : bip ? '아래를 고르고 [설치]를 누르십시오.' : '브라우저 메뉴의 "홈 화면에 추가" 또는 "앱 설치"로 만듭니다.';
+  $('sheet').style.display = 'flex';
+};
+$('shno').onclick = () => $('sheet').style.display = 'none';
+$('shok').onclick = async () => {
+  $('sheet').style.display = 'none';
+  if (IS_IOS){
+    if (KAKAO){ location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(location.href); return; }
+    // WebClip 프로필(.mobileconfig): 같은 PayloadIdentifier 면 예전 아이콘을 바꿈
+    const icon = await fetch('icon192.png').then(r => r.blob()).then(b => new Promise(res => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.readAsDataURL(b); }));
+    const url = location.href.split('#')[0];
+    const xml = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>PayloadContent</key><array><dict><key>FullScreen</key><true/><key>Icon</key><data>${icon}</data><key>IsRemovable</key><true/><key>Label</key><string>RM200 측색계</string><key>PayloadIdentifier</key><string>kr.ds4eqm.rm200app.webclip</string><key>PayloadType</key><string>com.apple.webClip.managed</string><key>PayloadUUID</key><string>6A1F2B3C-0D4E-4F50-8A61-72B83C94D0A5</string><key>PayloadVersion</key><integer>1</integer><key>URL</key><string>${url}</string></dict></array><key>PayloadDisplayName</key><string>RM200 측색계 앱</string><key>PayloadIdentifier</key><string>kr.ds4eqm.rm200app</string><key>PayloadType</key><string>Configuration</string><key>PayloadUUID</key><string>1C2D3E4F-5A6B-4C7D-8E9F-A0B1C2D3E4F5</string><key>PayloadVersion</key><integer>1</integer></dict></plist>`;
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([xml], {type:'application/x-apple-aspen-config'})); a.download = 'RM200_app.mobileconfig'; document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 1000);
+    toast('[허용] → 설정 앱 → "프로파일이 다운로드됨" → [설치]');
+    return;
+  }
+  if (bip){ bip.prompt(); bip = null; if ($('c3').checked) toast('설치 뒤 아이콘을 오른쪽 단추로 눌러 "작업 표시줄에 고정"을 고르십시오'); return; }
+  if (IS_ANDROID && !/Chrome/.test(UA) || KAKAO && IS_ANDROID){ location.href = 'intent://' + location.href.replace(/^https?:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;end'; return; }
+  toast(/Firefox/.test(UA) ? '주소창 옆 별(☆) 또는 메뉴 → 바로가기로 만드십시오' : /Safari/.test(UA) && /Mac/.test(UA) ? '사파리 메뉴 [파일] → [Dock에 추가]를 누르십시오' : '브라우저 메뉴(⋮) → "홈 화면에 추가" 또는 "앱 설치"를 누르십시오');
+};
+
+// ---------------------------------------------------------------- 주소 나눠 주기 (맨 아래 한 곳)
+const URL0 = location.href.split('#')[0].split('?')[0];
+document.querySelectorAll('[data-s]').forEach(b => b.onclick = async () => {
+  const s = b.dataset.s;
+  try { await navigator.clipboard.writeText(URL0); } catch(e){}
+  if (s === 'copy') return toast('주소를 복사했습니다');
+  if (s === 'sms') return location.href = 'sms:' + (IS_IOS ? '&' : '?') + 'body=' + encodeURIComponent('RM200 측색계 앱 ' + URL0);
+  if (s === 'kakao' && IS_ANDROID) return location.href = 'intent://send#Intent;scheme=kakaolink;package=com.kakao.talk;end';
+  if (s === 'kakao' && IS_IOS) return location.href = 'kakaotalk://';
+  if (s === 'flow' && IS_ANDROID) return location.href = 'intent://#Intent;package=com.webcash.bizplay.collabo;end';
+  if (navigator.share){ try { await navigator.share({title:'RM200 측색계 앱', text:'RM200 측색계 앱', url:URL0}); } catch(e){} }
+  else toast('주소를 복사했습니다. 보낼 곳에 붙여 넣으십시오');
+});
+
+// ---------------------------------------------------------------- 새 판 저절로 (묻지 않음, 측정 중이면 기다림)
+function checkUpdate(){
+  fetch('version.txt?t=' + Date.now(), {cache:'no-store'}).then(r => r.ok ? r.text() : '').then(v => {
+    v = v.trim();
+    let done = null; try { done = sessionStorage.getItem('rm200_reload'); } catch(e){}
+    if (v && v !== VER && done !== v){
+      const go = () => { if (busy) return setTimeout(go, 2000); try { sessionStorage.setItem('rm200_reload', v); } catch(e){} location.reload(); };
+      go();
+    }
+  }).catch(() => {});
+}
+checkUpdate(); setInterval(checkUpdate, 30 * 60 * 1000);
+</script>
+</body>
+</html>
