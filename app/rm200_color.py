@@ -76,6 +76,81 @@ USB_ERROR_HINTS = (
 )
 
 
+# ---- Ver 0.35: USB 드라이버 바꾸기는 RM200(0765:6001)에만 ----
+# 0.26~0.34 의 Zadig 창이 RM200이 아닌 장치(마우스, 블루투스 동글)를 골라 WinUSB 로 바꿔 버린 일이 있었음.
+RM200_ID = 'USB\\VID_0765&PID_6001'
+
+
+def _ps(cmd, timeout=40):
+    """PowerShell 한 줄 실행(창 없이). 출력 글자 또는 None."""
+    if os.name != 'nt':
+        return None
+    import subprocess
+    try:
+        r = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', cmd],
+                           capture_output=True, timeout=timeout,
+                           creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        return r.stdout.decode('utf-8', 'replace')
+    except Exception:
+        return None
+
+
+def rm200_driver_state():
+    """'absent'(안 꽂힘) / 'winusb'(이미 맞음) / 'need'(바꿔야 함) / 'unknown'."""
+    out = _ps("[Console]::OutputEncoding=[Text.Encoding]::UTF8; "
+              "$d = Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -like '" + RM200_ID + "*' }; "
+              "if (-not $d) { 'ABSENT' } else { foreach ($x in $d) { "
+              "$s = (Get-PnpDeviceProperty -InstanceId $x.InstanceId -KeyName DEVPKEY_Device_Service).Data; "
+              "'SVC=' + $s } }")
+    if out is None:
+        return 'unknown'
+    if 'ABSENT' in out:
+        return 'absent'
+    if 'SVC=' not in out:
+        return 'unknown'
+    return 'winusb' if 'winusb' in out.lower() else 'need'
+
+
+def wrong_winusb_devices():
+    """Zadig(libwdi)이 깐 드라이버 중 RM200이 아닌 장치 목록 [{'id','name','inf'}]. 윈도우가 아니면 []."""
+    out = _ps("[Console]::OutputEncoding=[Text.Encoding]::UTF8; "
+              "Get-CimInstance Win32_PnPSignedDriver | Where-Object { $_.DriverProviderName -eq 'libwdi' "
+              "-and $_.DeviceID -and $_.DeviceID -notlike '" + RM200_ID + "*' } | "
+              "ForEach-Object { 'DEV|' + $_.DeviceID + '|' + $_.InfName + '|' + $_.DeviceName }")
+    devs = []
+    for line in (out or '').splitlines():
+        parts = line.strip().split('|', 3)
+        if len(parts) == 4 and parts[0] == 'DEV' and not parts[1].upper().startswith(RM200_ID):
+            devs.append({'id': parts[1], 'inf': parts[2], 'name': parts[3] or parts[1]})
+    return devs
+
+
+def restore_wrong_devices(devs):
+    """관리자 허락 창을 띄워, 잘못 바뀐 장치의 Zadig 드라이버를 지우고 윈도우 기본 드라이버로 다시 잡게 함."""
+    if os.name != 'nt' or not devs:
+        return False
+    import base64, ctypes
+    lines = []
+    for d in devs:
+        if d['id'].upper().startswith(RM200_ID):
+            continue
+        did = d['id'].replace("'", "''")
+        lines.append(f"pnputil /remove-device '{did}'")
+        inf = d.get('inf') or ''
+        if inf.lower().startswith('oem') and inf.lower().endswith('.inf'):
+            lines.append(f"pnputil /delete-driver {inf} /uninstall /force")
+    if not lines:
+        return False
+    lines.append("Start-Sleep -Seconds 2; pnputil /scan-devices")
+    enc = base64.b64encode('; '.join(lines).encode('utf-16le')).decode('ascii')
+    try:
+        r = ctypes.windll.shell32.ShellExecuteW(None, 'runas', 'powershell.exe',
+                                                f'-NoProfile -WindowStyle Hidden -EncodedCommand {enc}', None, 0)
+        return int(r) > 32
+    except Exception:
+        return False
+
+
 def _is_usb_error(exc):
     msg = str(exc).lower()
     return any(h in msg for h in USB_ERROR_HINTS)
@@ -603,6 +678,7 @@ class AdvisorApp(tk.Tk):
         self.after(1500, self._cloud_start)          # Ver 0.26 공용 저장소
         self.after(6000, self._upd_start)            # Ver 0.26 깃허브 새 판
         self.after(2500, self._install_first_ask)    # Ver 0.26 처음 PC면 설치 묻기
+        self.after(4000, self._wrong_check)          # Ver 0.35 잘못 바뀐 USB 장치 찾기
         if getattr(self, '_pal_load_error', None):
             self.after(500, lambda: messagebox.showwarning("내 팔레트", self._pal_load_error))
 
@@ -689,7 +765,8 @@ class AdvisorApp(tk.Tk):
             ("기계", [("연결", self._connect_async), ("다시 연결", self._menu_reconnect),
                       ("기계 다시 켜기(재부팅)", self._menu_reboot),
                       ("USB 다시 연결 (뽑았다 꽂은 것처럼)", lambda: self._usb_reset()),
-                      ("USB 드라이버 바꾸기 (새 PC에서 한 번)", lambda: self._driver_offer(force=True)), None,
+                      ("USB 드라이버 바꾸기 (새 PC에서 한 번)", lambda: self._driver_offer(force=True)),
+                      ("잘못 바뀐 USB 장치 되돌리기 (마우스·블루투스 등)", lambda: self._wrong_check(quiet=False)), None,
                       ("기계 정보", lambda: self._notebook.select(3))]),
             ("도구", [("기계 화면 사진 저장...", self._menu_screenshot),
                       ("온도 읽기", self._menu_temperature),
@@ -991,7 +1068,7 @@ class AdvisorApp(tk.Tk):
         try:
             self._hb_tick()
         finally:
-            self.after(2000, self._heartbeat)
+            self.after(3000, self._heartbeat)   # Ver 0.37: 2초 → 3초(USB를 덜 건드림)
 
     def _hb_tick(self):
         if getattr(self, '_hb_running', False):
@@ -1029,13 +1106,20 @@ class AdvisorApp(tk.Tk):
                     except Exception as e:
                         res['ok'] = False
                         res['err'] = e
-                elif not connected and not busy and getattr(self, '_auto_connect', True):
+                elif not connected and not busy and getattr(self, '_auto_connect', True) \
+                        and time.time() >= getattr(self, '_ac_next', 0):
+                    # Ver 0.37: 붙이기 실패가 이어지면 3·6·12·24·48·60초로 간격을 늘림
+                    # (전에는 2초마다 USB 설정을 다시 걸어 USB가 먹통 되기 쉬웠음)
                     self.after(0, lambda: setattr(self, '_led_state', 'connecting'))
                     try:
                         rm.Connect()
                         res['reconnected'] = True
+                        self._ac_gap = 0
                     except Exception as e:
                         res['err'] = e
+                        self._ac_gap = min(60, max(3, getattr(self, '_ac_gap', 0) * 2 or 3))
+                        self._ac_next = time.time() + self._ac_gap
+                        self._meas_log(f"[USB] 붙이기 실패, {self._ac_gap}초 뒤 다시: {e}")
             finally:
                 self.after(0, lambda: self._on_hb(res, busy))
         threading.Thread(target=worker, daemon=True).start()
@@ -1047,6 +1131,7 @@ class AdvisorApp(tk.Tk):
             self._led_state = 'connecting' if res['present'] is False else ('ok' if self.connected else self._led_state)
             return
         if res['present'] is False:
+            self._ac_gap = 0; self._ac_next = 0     # 다시 꽂으면 바로 붙임
             if self.connected or self._led_state != 'gone':
                 try:
                     rm.Disconnect()
@@ -1072,8 +1157,7 @@ class AdvisorApp(tk.Tk):
                 if self._is_driver_err(res['err']):
                     self._driver_offer()
                     return
-                if res['present'] and self._usb_auto_ok():
-                    self._usb_reset(auto=True)
+                # Ver 0.37: 저절로 USB 초기화(포트 리셋)는 하지 않음 — 간격을 늘려 다시 붙이기만
             return
         if busy or res['ok'] is None:
             return
@@ -1091,12 +1175,7 @@ class AdvisorApp(tk.Tk):
                 self._set_dev_alert(res['alert'], res.get('lcd'))
             return
         self._hb_fail += 1
-        if self._hb_fail >= 2 and self._usb_auto_ok():
-            self.connected = False
-            self._led_state = 'lost'
-            self._usb_reset(auto=True)
-            return
-        if self._hb_fail >= 2:
+        if self._hb_fail >= 3:   # Ver 0.37: 3번 연속(약 9초) 대답이 없을 때만, USB 초기화 없이 닫고 다시 붙임
             # 꽂혀 있는데 대답이 없음 → 연결을 닫고 다음 차례에 다시 연결
             try:
                 rm.Disconnect()
@@ -1512,7 +1591,7 @@ class AdvisorApp(tk.Tk):
         root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         return os.path.join(root, 'tools', 'zadig', 'zadig-2.9.exe')
 
-    def _driver_offer(self, force=False):
+    def _driver_offer(self, force=False, checked=False):
         if getattr(self, '_drv_win', None) is not None:
             try:
                 self._drv_win.lift(); return
@@ -1521,18 +1600,31 @@ class AdvisorApp(tk.Tk):
         if not force and getattr(self, '_drv_told', False):
             return
         self._drv_told = True
+        if os.name == 'nt' and not checked:
+            # Ver 0.35: RM200이 꽂혀 있고 드라이버가 아직 WinUSB 가 아닐 때만 Zadig 을 엶
+            self._set_status("RM200 USB 드라이버 상태를 확인하는 중...")
+
+            def chk():
+                st = rm200_driver_state()
+                self.after(0, lambda: self._driver_offer_after(st))
+            threading.Thread(target=chk, daemon=True).start()
+            return
         w = tk.Toplevel(self); self._drv_win = w
         w.title("USB 드라이버 바꾸기"); w.configure(bg='#ffffff'); w.transient(self)
         tk.Label(w, text="이 PC에서 RM200을 쓰려면 USB 드라이버를 한 번 바꿔야 합니다", bg='#ffffff',
                  fg='#c62828', font=('맑은 고딕', 13, 'bold')).pack(padx=18, pady=(14, 6), anchor='w')
         tk.Label(w, text="1. [지금 바꾸기]를 누르십시오. \"변경을 허용하시겠습니까?\"가 나오면 [예].\n"
-                         "2. 뜨는 창(Zadig)에서 맨 위 칸에 RM200(또는 X-Rite)이 골라져 있고,\n"
-                         "   가운데 오른쪽 칸이 WinUSB 인지 보십시오. (보통 저절로 그렇게 되어 있습니다)\n"
-                         "   목록에 RM200이 없으면 Options 메뉴 → List All Devices 를 누르고 고르십시오.\n"
-                         "3. 큰 단추 [Install Driver](또는 [Replace Driver])를 누르십시오. 1~2분 걸립니다.\n"
+                         "2. 뜨는 창(Zadig)에서 맨 위 칸이 RM200(또는 X-Rite)이고,\n"
+                         "   그 아래 USB ID 칸이 0765  6001 인지 확인하십시오.\n"
+                         "3. 맞을 때만 큰 단추 [Install Driver](또는 [Replace Driver])를 누르십시오. 1~2분 걸립니다.\n"
                          "4. 끝나면 그 창이 저절로 닫히고 이 프로그램이 기계에 연결됩니다.\n"
                          "PC마다 한 번만 하면 됩니다. 기계 자료는 건드리지 않습니다.",
                  bg='#ffffff', fg='#333', justify=tk.LEFT, font=('맑은 고딕', 11)).pack(padx=18, anchor='w')
+        tk.Label(w, text="주의: 맨 위 칸이 마우스, 키보드, 블루투스, USB Receiver 처럼 RM200이 아니거나\n"
+                         "USB ID가 0765 6001 이 아니면 절대 누르지 말고 Zadig 창을 닫으십시오.\n"
+                         "(다른 장치를 바꾸면 그 장치가 멈춥니다)",
+                 bg='#ffffff', fg='#c62828', justify=tk.LEFT,
+                 font=('맑은 고딕', 11, 'bold')).pack(padx=18, pady=(8, 0), anchor='w')
         self._drv_state = tk.StringVar(value="")
         tk.Label(w, textvariable=self._drv_state, bg='#ffffff', fg='#1e6fd9',
                  font=('맑은 고딕', 11, 'bold')).pack(padx=18, pady=(8, 0), anchor='w')
@@ -1544,6 +1636,59 @@ class AdvisorApp(tk.Tk):
                   font=('맑은 고딕', 11), cursor='hand2').pack(side=tk.LEFT, padx=6)
         w.protocol("WM_DELETE_WINDOW", self._driver_close)
 
+    def _driver_offer_after(self, st):
+        if st == 'absent':
+            self._set_status("RM200이 꽂혀 있지 않아 드라이버를 바꾸지 않았습니다")
+            messagebox.showinfo("USB 드라이버", "RM200이 USB에 꽂혀 있지 않거나 꺼져 있습니다.\n"
+                                "기계를 켜고 USB에 꽂은 뒤 다시 해 주십시오.\n\n"
+                                "(RM200이 없을 때 바꾸면 다른 장치가 바뀔 수 있어 막았습니다)", parent=self)
+            return
+        if st == 'winusb':
+            self._set_status("RM200 드라이버는 이미 맞습니다. USB만 다시 연결합니다")
+            self._usb_reset()
+            return
+        self._driver_offer(force=True, checked=True)
+        try:
+            self._drv_state.set("" if st == 'need' else "드라이버 상태를 확인하지 못했습니다. 아래 빨간 글을 꼭 확인하십시오.")
+        except Exception:
+            pass
+
+    # ---- Ver 0.35: 잘못 바뀐 USB 장치(마우스 등) 찾아 되돌리기 ----
+    def _wrong_check(self, quiet=True):
+        if os.name != 'nt' or getattr(self, '_wrong_busy', False):
+            return
+        self._wrong_busy = True
+
+        def worker():
+            devs = wrong_winusb_devices()
+            self.after(0, lambda: self._wrong_found(devs, quiet))
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _wrong_found(self, devs, quiet):
+        self._wrong_busy = False
+        if not devs:
+            if not quiet:
+                messagebox.showinfo("USB 장치 확인", "RM200 말고 드라이버가 잘못 바뀐 장치는 없습니다.", parent=self)
+            return
+        key = tuple(sorted(d['id'] for d in devs))
+        if quiet and key == getattr(self, '_wrong_key', None) and time.time() - getattr(self, '_wrong_t', 0) < 60:
+            return       # 같은 장치를 1분 안에 또 묻지 않음
+        self._wrong_key, self._wrong_t = key, time.time()
+        names = "\n".join(f"  · {d['name']}" for d in devs[:8])
+        if messagebox.askyesno(
+                "잘못 바뀐 USB 장치가 있습니다",
+                "USB 드라이버 바꾸기(Zadig)가 RM200이 아닌 장치의 드라이버를 바꿔 놓았습니다.\n"
+                "이 장치들이 지금 제대로 움직이지 않을 수 있습니다(마우스, 블루투스 등).\n\n"
+                f"{names}\n\n"
+                "[예]를 누르면 원래 윈도우 드라이버로 되돌립니다.\n"
+                "\"변경을 허용하시겠습니까?\" 창이 뜨면 [예]를 누르십시오. RM200은 건드리지 않습니다.",
+                parent=self):
+            ok = restore_wrong_devices(devs)
+            self._set_status("잘못 바뀐 장치를 되돌리는 중입니다(20초쯤). 끝나면 그 장치를 뽑았다 꽂으십시오."
+                             if ok else "되돌리기를 시작하지 못했습니다")
+            if ok:
+                self.after(20000, lambda: self._wrong_check(quiet=False))
+
     def _driver_close(self):
         w = getattr(self, '_drv_win', None); self._drv_win = None
         if w is not None:
@@ -1553,6 +1698,13 @@ class AdvisorApp(tk.Tk):
                 pass
 
     def _driver_run(self):
+        # Ver 0.36: 누르는 순간 한 번 더 확인 — RM200이 꽂혀 있고 드라이버가 아직 아닐 때만
+        if os.name == 'nt' and rm200_driver_state() in ('absent', 'winusb'):
+            try:
+                self._drv_state.set("지금은 RM200이 안 꽂혀 있거나 이미 드라이버가 맞아 Zadig 을 열지 않았습니다.")
+            except Exception:
+                pass
+            return
         z = self._zadig_path()
         try:
             ini = os.path.join(os.path.dirname(z), 'zadig.ini')
@@ -1573,7 +1725,7 @@ class AdvisorApp(tk.Tk):
         self._drv_launched = ok
         try:
             self._drv_state.set("Zadig 창에서 [Install Driver]를 누르십시오. 끝나면 저절로 연결됩니다..."
-                                if ok else "Zadig을 열지 못했습니다. 프로그램 폴더의 USB드라이버_바꾸기.bat 을 눌러 주십시오.")
+                                if ok else "Zadig을 열지 못했습니다. 프로그램 폴더의 tools\\zadig 이 있는지 확인하십시오.")
         except Exception:
             pass
         self._auto_connect = True
@@ -1582,12 +1734,15 @@ class AdvisorApp(tk.Tk):
     def _drv_wait(self, n):
         if self.connected:
             self._set_status("USB 드라이버를 바꿨고 기계에 연결했습니다")
+            self.after(3000, self._wrong_check)
             try:
                 self._drv_state.set("연결됐습니다. 이 창을 닫으셔도 됩니다.")
             except Exception:
                 pass
             self.after(2500, self._driver_close)
             return
+        if n % 5 == 4 and getattr(self, '_drv_launched', False):
+            self._wrong_check()       # Ver 0.36: Zadig 이 다른 장치를 바꿨으면 바로 알려 되돌리게
         if n < 120 and getattr(self, '_drv_win', None) is not None:
             self.after(3000, lambda: self._drv_wait(n + 1))
 
