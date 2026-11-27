@@ -20,6 +20,14 @@ header{position:sticky;top:0;z-index:5;background:var(--navy);color:#fff;padding
 #ver{font-size:12px;background:rgba(255,255,255,.15);padding:2px 7px;border-radius:8px}
 #led{margin-left:auto;font-size:13px;display:flex;align-items:center;gap:6px;white-space:nowrap}
 #led i{width:11px;height:11px;border-radius:50%;background:#999;display:inline-block}
+.rk{display:flex;gap:8px;margin-top:10px}
+.rk>div{flex:1;min-width:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;cursor:pointer;background:#fff}
+.rk>div.r1{border:3px solid #1e3a6e}
+.rk i{display:block;height:74px}
+.rk b{display:block;font-size:12px;color:#1e3a6e;padding:5px 7px 0}
+.rk span{display:block;font-size:14px;font-weight:700;padding:0 7px;word-break:break-all}
+.rk small{display:block;font-size:12px;color:#666;padding:0 7px 6px}
+#newv{margin-top:6px}#newv button{border:0;border-radius:9px;padding:5px 11px;font:inherit;font-size:13px;background:#e8eef8;color:#1e3a6e}#newv button.hot{background:#c62828;color:#fff;font-weight:700}
 #online{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;min-height:22px}
 .chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;background:rgba(255,255,255,.14);padding:3px 9px;border-radius:12px}
 .chip i{width:8px;height:8px;border-radius:50%;background:#66bb6a;animation:bl 1.6s infinite}
@@ -79,6 +87,7 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
 <header>
   <div class="hrow"><span id="ver"></span><b>RM200 측색계 앱</b><span id="led"><i id="dot"></i><span id="ledt">기계 없음</span></span></div>
   <div id="online"></div>
+  <div id="newv"><button id="newvb">새 판 확인</button></div>
 </header>
 <nav>
   <button data-t="meas" class="on">측정</button>
@@ -117,11 +126,15 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
     <h3>0점 맞추기(교정)가 필요합니다</h3>
     <p>덮개를 닫아 흰 교정판 위에 두고 기계 위쪽 빨간 단추를 한 번 누르십시오. 끝나면 이 칸이 저절로 사라집니다.</p>
   </div>
+  <div class="card" id="dkcard"><h4 style="margin:0 0 6px">찾을 팬톤 견본책</h4>
+    <select id="mdeck" style="width:100%;font:inherit;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:10px"><option value="">기계가 고른 견본책 그대로</option></select>
+    <p class="note" style="margin:6px 0 0">재면 이 견본책에서 가장 가까운 팬톤색 1·2·3순위와, 내 팔레트에서 가까운 것을 바로 보여 줍니다.</p></div>
   <div class="card hidden" id="res">
     <div class="sw" id="sw"></div>
     <div class="code" id="code"></div>
     <div class="dim" id="deck"></div>
     <div class="dim" id="lab"></div>
+    <div class="rk" id="rank"></div>
     <div id="more" style="margin-top:10px"></div>
     <div id="own" style="margin-top:12px"></div>
   </div>
@@ -151,7 +164,7 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
   <div class="card"><h4>내 팔레트 <span class="pill" id="paln"></span></h4>
   <input type="search" id="palq" placeholder="이름으로 찾기 (예: LVT, 벽지)">
   <div id="pal" style="margin-top:8px"></div>
-  <p class="note">PC 프로그램의 내 팔레트와 같은 자료입니다(공용 저장소). 고치는 것은 PC 프로그램에서 합니다.</p></div>
+  <p class="note">색을 누르면 팬톤색 1·2·3순위(가장 가까운 팬톤색)를 보여 줍니다. PC 프로그램의 내 팔레트와 같은 자료입니다(공용 저장소). 고치는 것은 PC 프로그램에서 합니다.</p></div>
 </section>
 <!-- 팬톤 찾기 -->
 <section id="t-find" class="hidden">
@@ -207,7 +220,7 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
 <script src="qrcode.js"></script>
 <script>
 'use strict';
-const VER = '0.47';
+const VER = '0.52';
 const VID = 0x0765, PID = 0x6001;
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -317,6 +330,16 @@ function deckDraw(more){
   $('pgrid').insertAdjacentHTML('beforeend', part.map(x => `<div class="t" data-n="${esc(x.name)}"><i style="background:${lab2rgb(...x.lab)}"></i><span>${esc(x.name)}</span></div>`).join(''));
 }
 $('pdeck').onchange = () => deckDraw(false);
+// Ver 0.50: 측정 칸 '찾을 팬톤 견본책'
+async function mdeckInit(){
+  await pantone();
+  const m = new Map(); for (const x of PTL) m.set(x.deck, (m.get(x.deck) || 0) + 1);
+  let cur = ''; try { cur = localStorage.getItem('rm200_mdeck') || ''; } catch(e){}
+  $('mdeck').innerHTML = '<option value="">기계가 고른 견본책 그대로</option>' + [...m].map(([k, n]) => `<option value="${esc(k)}">${esc(k)} (${n}색)</option>`).join('');
+  if (m.has(cur)) $('mdeck').value = cur;
+}
+$('mdeck').onchange = () => { try { localStorage.setItem('rm200_mdeck', $('mdeck').value); } catch(e){} toast($('mdeck').value ? `이제 ${$('mdeck').value}에서 찾습니다` : '기계가 고른 견본책에서 찾습니다'); };
+mdeckInit().catch(() => {});
 async function ptDetail(x){
   const items = palItems(await palettes());
   const own = items.map(y => ({...y, de: de2000(...x.lab, ...y.lab)})).sort((a, b) => a.de - b.de).slice(0, 5);
@@ -421,10 +444,13 @@ async function loadPal(){
   $('paln').textContent = items.length + '색';
   const q = $('palq').value.trim().toLowerCase();
   const show = items.filter(x => !q || (x.pal + ' ' + x.name).toLowerCase().includes(q)).slice(0, 200);
-  $('pal').innerHTML = show.length ? show.map(x => `<div class="row"><span class="c" style="background:${lab2rgb(...x.lab)}"></span><div>${esc(x.name)}<div class="dim">${esc(x.pal)}</div></div><small>L ${(+x.lab[0]).toFixed(1)}</small></div>`).join('')
+  PALSHOW = show;
+  $('pal').innerHTML = show.length ? show.map((x, i) => `<div class="row tap" data-i="${i}"><span class="c" style="background:${lab2rgb(...x.lab)}"></span><div>${esc(x.name)}<div class="dim">${esc(x.pal)}</div></div><small>L ${(+x.lab[0]).toFixed(1)}</small></div>`).join('')
     : '<div class="dim">' + (items.length ? '찾지 못했습니다' : '아직 공용 저장소에 내 팔레트가 없습니다. PC 프로그램에서 팔레트를 저장하면 여기에도 나옵니다.') + '</div>';
 }
 $('palq').oninput = loadPal;
+let PALSHOW = [];
+$('pal').onclick = e => { const r = e.target.closest('.row.tap'); if (!r) return; const x = PALSHOW[+r.dataset.i]; if (x) colorDetail(x.name, x.pal, x.lab, null); };
 async function ownNear(name, lab, box, after){
   // 우리 물건에서 찾기: 내 팔레트에서 가장 가까운 5개 (색 차이 ΔE2000)
   const items = palItems(await palettes());
@@ -459,6 +485,32 @@ async function beat(){
   } catch(e){}
 }
 beat(); setInterval(() => { if (!document.hidden) beat(); }, 30000);
+// Ver 0.50: 켤 때마다 팬덱·펌웨어 새 판 확인(PC 프로그램이 엑스라이트 서버에 물어 공용 저장소에 남긴 것)
+let XL = null;
+async function newCheck(){
+  try { [XL] = await getDoc('rm200/xrite_latest'); } catch(e){ return false; }
+  const nw = XL && Array.isArray(XL.newer) ? XL.newer : [];
+  $('newvb').className = nw.length ? 'hot' : '';
+  $('newvb').textContent = !XL ? '새 판 확인' : nw.length ? `새 판 있음 ${nw.length}개 · 보기` : `새 판 확인 · 없음 (${String(XL.checked || '').slice(5)})`;
+  return true;
+}
+// Ver 0.52: 누를 때마다 다시 확인하고, 서버 확인이 계속 되고 있는지(마지막 확인 시각) 보여 줌
+$('newvb').onclick = async () => {
+  $('newvb').textContent = '확인하는 중...';
+  const ok = await newCheck(), x = XL || {};
+  const nw = Array.isArray(x.newer) ? x.newer : [];
+  const last = x.checked ? new Date(String(x.checked).replace(' ', 'T') + ':00+09:00') : null;
+  const days = last && !isNaN(last) ? Math.floor((Date.now() - last) / 86400000) : null;
+  const live = days === null ? '<b style="color:#c62828">아직 서버 확인 기록이 없습니다.</b> PC 프로그램을 기계에 연결하면 저절로 확인합니다.'
+    : days <= 7 ? `<b style="color:#2e7d32">서버 확인이 잘 되고 있습니다.</b> 마지막 확인 ${esc(x.checked)} (${days ? days + '일 전' : '오늘'}) · ${esc(x.by || '')}`
+    : `<b style="color:#c62828">마지막 서버 확인이 ${days}일 전입니다.</b> PC 프로그램을 기계에 한 번 연결하면 다시 확인합니다. (${esc(x.checked)} · ${esc(x.by || '')})`;
+  $('pdet').innerHTML = `<div class="code" style="font-size:21px">${!ok ? '인터넷에 닿지 않습니다' : nw.length ? '새 판이 있습니다' : '새 판이 없습니다'}</div><div class="msg">${live}</div>`
+    + (nw.length ? nw.map(f => `<div class="row"><div>${esc(f.desc || f.sku || '')}<div class="dim">기계 판 ${esc(f.dev || '?')} → 새 판 ${esc(f.ver || '')}</div></div></div>`).join('') + '<p class="note">새 판을 기계에 넣는 일은 PC 프로그램에서 합니다.</p>'
+      : '<p class="note">기계 안 팬덱(2021년 8월 판)보다 새로운 판이 서버에 없습니다. 이 기계(팬톤 CAPSURE)는 판매가 끝난 모델이라 새 판이 더 나오지 않을 수 있습니다. 휴대폰은 엑스라이트 서버에 직접 물을 수 없어서, PC 프로그램이 기계에 연결될 때마다 물어 본 결과를 보여 줍니다.</p>')
+    + '<button class="sub" id="pdetx">닫기</button>';
+  $('pdet').classList.remove('hidden'); $('pdetx').onclick = () => $('pdet').classList.add('hidden');
+};
+newCheck();
 addEventListener('pagehide', () => { try { fetch(`${FS}/rm200_presence/${PID_}?key=${KEY}`, {method:'DELETE', keepalive:true}); } catch(e){} });
 // 5초 누르기: 이 기기 이름 바꾸기 (대표님 프로그램 공통 규칙)
 (() => {
@@ -496,8 +548,10 @@ async function cmd0(bytes){
   if (op === '7714'){ if (!rebootOK) throw new Error('막힌 명령'); rebootOK = false; }
   if (dirty) await drain();
   const n = data.length;
-  await dev.controlTransferOut({requestType:'vendor', recipient:'device', request:0x97, value:(n>>16)&0xffff, index:n&0xffff});
-  await dev.transferOut(2, data);
+  try {   // Ver 0.50: 보내기에서 기계가 대답 없이 멈추면 '재는 중'에 영영 머물던 것 고침
+    await withTimeout(dev.controlTransferOut({requestType:'vendor', recipient:'device', request:0x97, value:(n>>16)&0xffff, index:n&0xffff}), 5000);
+    await withTimeout(dev.transferOut(2, data), 5000);
+  } catch(e){ dirty = true; throw e; }
   let r;
   try { r = await withTimeout(dev.transferIn(1, Math.max(bufsize, 64) + 64), 5000); } catch(e){ dirty = true; throw e; }
   const b = new Uint8Array(r.data.buffer, r.data.byteOffset, r.data.byteLength);
@@ -561,7 +615,7 @@ async function measure(){
     await afterMeasured();
   } catch(e){
     say('기계와 주고받지 못했습니다: ' + e.message + ' (선을 다시 꽂고 [기계 연결])', true); led('err', '오류');
-  } finally { busy = false; $('go').disabled = false; if (dev) watchCal(); }
+  } finally { busy = false; $('go').disabled = false; if (dev){ if ($('ledt').textContent === '재는 중') led('ok', '연결됨'); watchCal(); } }
 }
 // ---- Ver 0.4: 잰 뒤 결과 받기. 기계가 고른 색(7823)이 비면 기계에 저장된 기록(7820)에서 읽음(둘 다 읽기만) ----
 function parseRecord(b){
@@ -622,20 +676,23 @@ function deckOf(devDeck){
   return DKMAP.get(deckNorm(devDeck)) || null;
 }
 // 잰 색 하나 자세히: 같은 견본책·모든 견본책에서 비슷한 팬톤, 우리 물건
-async function measDetail(r){
+function measDetail(r){ return colorDetail('잰 색 ' + (r.when ? r.when.slice(5, 16) : ''), r.deck || '', r.lab, r.deck); }
+async function colorDetail(title, sub, lab, devDeck){
   await pantone().catch(() => null);
-  const dk = deckOf(r.deck), same = dk ? ptNear(r.lab, 5, dk) : [], all = ptNear(r.lab, 5);
+  const r = {lab};
+  const dk = $('mdeck').value || deckOf(devDeck), same = dk ? ptNear(r.lab, 3, dk) : [], all = ptNear(r.lab, 3);
   const items = palItems(await palettes());
   const own = items.map(y => ({...y, de: de2000(...r.lab, ...y.lab)})).sort((a, b) => a.de - b.de).slice(0, 5);
   const row = y => `<div class="row tap" data-n="${esc(y.name)}"><span class="c" style="background:${lab2rgb(...y.lab)}"></span>PANTONE ${esc(y.name)}<small>ΔE ${y.de.toFixed(2)}<br>${esc(y.deck)}</small></div>`;
-  $('pdet').innerHTML = `<div class="sw" style="height:110px;background:${lab2rgb(...r.lab)}"></div><div class="code" style="font-size:21px">잰 색 ${esc(r.when ? r.when.slice(5, 16) : '')}</div><div class="dim">${esc(r.deck || '')} · L ${r.lab[0]} a ${r.lab[1]} b ${r.lab[2]}</div>`
-    + (same.length ? `<h4 style="margin-top:12px">같은 견본책(${esc(dk)})에서 비슷한 팬톤색</h4>` + same.map(row).join('') : '')
-    + '<h4 style="margin-top:12px">모든 견본책에서 비슷한 팬톤색</h4>' + all.map(row).join('')
+  const rk = L => '<div class="rk">' + L.map((x, i) => `<div class="${i ? '' : 'r1'} tap" data-n="${esc(x.name)}"><i style="background:${lab2rgb(...x.lab)}"></i><b>${i + 1}순위</b><span>${esc(x.name)}</span><small>ΔE ${x.de.toFixed(2)}</small></div>`).join('') + '</div>';
+  $('pdet').innerHTML = `<div class="sw" style="height:110px;background:${lab2rgb(...r.lab)}"></div><div class="code" style="font-size:21px">${esc(title)}</div><div class="dim">${esc(sub)} · L ${(+r.lab[0]).toFixed(1)} a ${(+r.lab[1]).toFixed(1)} b ${(+r.lab[2]).toFixed(1)}</div>`
+    + (same.length ? `<h4 style="margin-top:12px">${esc(dk)}에서 가장 가까운 팬톤색</h4>` + rk(same) : '')
+    + `<h4 style="margin-top:12px">${same.length ? '모든 견본책에서' : '가장 가까운 팬톤색'}</h4>` + rk(all)
     + (own.length ? '<h4 style="margin-top:12px">우리 물건 중 가까운 것</h4>' + own.map(y => `<div class="row"><span class="c" style="background:${lab2rgb(...y.lab)}"></span>${esc(y.name)}<small>ΔE ${y.de.toFixed(2)}<br>${esc(y.pal)}</small></div>`).join('') : '')
     + '<div class="note" style="margin-top:6px">팬톤색을 누르면 [팬톤 색] 칸의 견본책에서 그 색을 보여 줍니다.</div><button class="sub" id="pdetx">닫기</button>';
   $('pdet').classList.remove('hidden');
   $('pdetx').onclick = () => $('pdet').classList.add('hidden');
-  $('pdet').querySelectorAll('.row.tap').forEach(e => e.onclick = () => openInDeck(e.dataset.n));
+  $('pdet').querySelectorAll('.row.tap,.rk .tap').forEach(e => e.onclick = () => openInDeck(e.dataset.n));
 }
 // 팬톤색 보기에서 그 색 찾아 보이기
 async function openInDeck(name){
@@ -733,14 +790,20 @@ async function show(list){
   await pantone().catch(() => null);
   const top = list[0]; const hit = findPT(top.name);
   $('res').classList.remove('hidden');
-  $('sw').style.background = hit ? lab2rgb(...hit.lab) : '#ddd';
-  $('code').textContent = top.name.replace('PANTONE® ', 'PANTONE ');
-  $('deck').textContent = top.deck + (top.page ? ` · ${top.page}` : '');
-  $('lab').textContent = hit ? `견본 Lab  L ${hit.lab[0]}  a ${hit.lab[1]}  b ${hit.lab[2]}` : '';
-  const seen = new Set([norm(top.name)]); const more = [];
+  // Ver 0.50: 잰 색과 가장 가까운 팬톤색 1·2·3순위(고른 견본책, 없으면 기계가 고른 견본책)
+  const dk = $('mdeck').value || (hit && hit.deck) || deckOf(top.deck);
+  const rank = hit ? ptNear(hit.lab, 3, dk) : [];
+  const one = rank[0];
+  $('sw').style.background = one ? lab2rgb(...one.lab) : hit ? lab2rgb(...hit.lab) : '#ddd';
+  $('code').textContent = one ? 'PANTONE ' + one.name : top.name.replace('PANTONE® ', 'PANTONE ');
+  $('deck').textContent = one ? `1순위 · ${one.deck}` : top.deck + (top.page ? ` · ${top.page}` : '');
+  $('lab').textContent = one && one.name !== hit.name ? `기계가 고른 색: ${top.name.replace('PANTONE® ', '')} (${top.deck}) → 고른 견본책에서 가장 가까운 색` : hit ? `견본 Lab  L ${hit.lab[0]}  a ${hit.lab[1]}  b ${hit.lab[2]}` : '';
+  $('rank').innerHTML = rank.map((x, i) => `<div class="${i ? '' : 'r1'}" data-n="${esc(x.name)}"><i style="background:${lab2rgb(...x.lab)}"></i><b>${i + 1}순위</b><span>${esc(x.name)}</span><small>ΔE ${x.de.toFixed(2)}</small></div>`).join('');
+  $('rank').querySelectorAll('div[data-n]').forEach(e => e.onclick = () => openInDeck(e.dataset.n));
+  const seen = new Set([norm(top.name), ...rank.map(x => norm(x.name))]); const more = [];
   for (const it of list.slice(1)){ const k = norm(it.name); if (seen.has(k)) continue; seen.add(k); const h = findPT(it.name);
     more.push(`<div class="row"><span class="c" style="background:${h ? lab2rgb(...h.lab) : '#ddd'}"></span>${esc(it.name)}<small>${esc(it.deck)}</small></div>`); }
-  $('more').innerHTML = more.length ? '<div class="dim">다른 후보</div>' + more.slice(0, 5).join('') : '';
+  $('more').innerHTML = more.length ? '<div class="dim">기계가 낸 다른 후보</div>' + more.slice(0, 5).join('') : '';
   $('own').innerHTML = '';
   if (hit){
     const items = palItems(await palettes());

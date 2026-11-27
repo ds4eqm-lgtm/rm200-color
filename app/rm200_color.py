@@ -2958,6 +2958,11 @@ class AdvisorApp(tk.Tk):
             latest = {'checked': dt.datetime.now().strftime('%Y-%m-%d %H:%M'), 'by': self._pc_name,
                       'decks': {f['SKU']: {'ver': f['VersionString'], 'desc': f['Description']}
                                 for f in files if f.get('FileType') == 'Fandeck' and f.get('SKU')}}
+            # Ver 0.52: 기계 안 판과 서버 새 판 목록도 남겨 휴대폰 앱이 켤 때 [새 판 있음]을 보여 줌
+            if dev:
+                latest['dev'] = dict(dev)
+                latest['newer'] = [{'sku': f['SKU'], 'desc': f['Description'], 'ver': f['VersionString'], 'dev': dev.get(f['SKU'], '')}
+                                   for f in dev_new]
 
             def up():
                 try:
