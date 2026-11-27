@@ -228,7 +228,7 @@ def online(stale=150):
 
 
 def add_log(items, who, tries=5):
-    """Ver 0.42: 측정값을 공용 기록(rm200/meas_log, 최근 200개)에 덧붙임. 휴대폰 앱과 같은 문서.
+    """Ver 0.42: 측정값을 공용 기록(rm200/meas_log, 최근 200개)에 덧붙임. 모바일 폰 앱과 같은 문서.
     다른 기기와 겹치면 다시 읽고 다시 씀. 성공하면 True."""
     import random
     for _ in range(tries):

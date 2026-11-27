@@ -1326,7 +1326,7 @@ class AdvisorApp(tk.Tk):
                 webbrowser.open('mailto:?subject=' + urllib.parse.quote('RM200 측색계')
                                 + '&body=' + urllib.parse.quote(text)); opened = True
             elif how == 'qr':
-                # Ver 0.43: 휴대폰 앱·PC 받기 주소 QR 두 개를 크게 보여 주는 쪽을 엶
+                # Ver 0.43: 모바일 폰 앱·PC 받기 주소 QR 두 개를 크게 보여 주는 쪽을 엶
                 import webbrowser
                 webbrowser.open('https://ds4eqm-lgtm.github.io/rm200-color/phone/qr.html'); opened = True
             elif how == 'other' and os.name == 'nt':
@@ -2953,12 +2953,12 @@ class AdvisorApp(tk.Tk):
                 dev_new.append(f)
         self._xs_new = new
         self._xs_dev_new = dev_new
-        # Ver 0.44: 서버 최신 판 번호를 공용 저장소에 남겨 휴대폰 앱의 [팬덱 새 판 확인]도 비교할 수 있게 함
+        # Ver 0.44: 서버 최신 판 번호를 공용 저장소에 남겨 모바일 폰 앱의 [팬덱 새 판 확인]도 비교할 수 있게 함
         if getattr(self, '_cloud_on', False):
             latest = {'checked': dt.datetime.now().strftime('%Y-%m-%d %H:%M'), 'by': self._pc_name,
                       'decks': {f['SKU']: {'ver': f['VersionString'], 'desc': f['Description']}
                                 for f in files if f.get('FileType') == 'Fandeck' and f.get('SKU')}}
-            # Ver 0.52: 기계 안 판과 서버 새 판 목록도 남겨 휴대폰 앱이 켤 때 [새 판 있음]을 보여 줌
+            # Ver 0.52: 기계 안 판과 서버 새 판 목록도 남겨 모바일 폰 앱이 켤 때 [새 판 있음]을 보여 줌
             if dev:
                 latest['dev'] = dict(dev)
                 latest['newer'] = [{'sku': f['SKU'], 'desc': f['Description'], 'ver': f['VersionString'], 'dev': dev.get(f['SKU'], '')}
@@ -3223,7 +3223,7 @@ class AdvisorApp(tk.Tk):
         ptr = tk.Frame(frame, bg='#eef4ff', cursor='hand2', highlightthickness=1,
                        highlightbackground='#9bbcf0')
         ptr.pack(fill=tk.X, pady=(2, 4))
-        w['pt_chip'] = tk.Canvas(ptr, width=34, height=34, bg='#eef4ff', highlightthickness=0,
+        w['pt_chip'] = tk.Canvas(ptr, width=86, height=52, bg='#eef4ff', highlightthickness=0,
                                  cursor='hand2')
         w['pt_chip'].pack(side=tk.LEFT, padx=(4, 6), pady=3)
         w['pt_var'] = tk.StringVar(value="가장 가까운 팬톤: 측정하면 여기에 나옵니다")
@@ -3232,6 +3232,17 @@ class AdvisorApp(tk.Tk):
         lb.pack(side=tk.LEFT, fill=tk.X, expand=True)
         for wd in (ptr, w['pt_chip'], lb):
             wd.bind('<Button-1>', lambda e, s=side: self._goto_pantone(s))
+        # Ver 0.53: 찾을 팬톤 견본책 고르기(1·2·3순위를 이 견본책에서 매김, 기억함)
+        dkr = tk.Frame(frame)
+        dkr.pack(fill=tk.X, pady=(0, 4))
+        tk.Label(dkr, text="찾을 견본책:", font=('맑은 고딕', 9)).pack(side=tk.LEFT)
+        if not hasattr(self, '_deck_var'):
+            self._deck_var = tk.StringVar(value=self._deck_load())
+        cb = ttk.Combobox(dkr, textvariable=self._deck_var, state='readonly', width=24,
+                          values=['모든 견본책'] + [d.get('ko', '') for d in pantone_decks()])
+        cb.pack(side=tk.LEFT, padx=4)
+        cb.bind('<<ComboboxSelected>>', lambda e: self._deck_changed())
+        w['deck_cb'] = cb
 
         list_frame = ttk.LabelFrame(frame, text="측정값 목록", padding=4)
         list_frame.pack(fill=tk.BOTH, expand=True, pady=5)
@@ -6378,7 +6389,7 @@ class AdvisorApp(tk.Tk):
         pal_var = tk.StringVar(value=f"출장 측정/{today}")
         ttk.Entry(bar2, textvariable=pal_var, width=30).pack(side=tk.LEFT, padx=4)
         share_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(bar2, text="공용 기록에도 올리기 (휴대폰 앱·다른 PC에서도 보임)", variable=share_var).pack(side=tk.LEFT, padx=10)
+        ttk.Checkbutton(bar2, text="공용 기록에도 올리기 (모바일 폰 앱·다른 PC에서도 보임)", variable=share_var).pack(side=tk.LEFT, padx=10)
         self._bulk_pal_var, self._bulk_share_var, self._bulk_st = pal_var, share_var, st
 
         bar3 = ttk.Frame(W); bar3.pack(fill=tk.X, padx=12, pady=8)
@@ -6508,8 +6519,33 @@ class AdvisorApp(tk.Tk):
         self._bulk_read, self._bulk_put = read, put
         read(False)
 
-    def _nearest_pantone(self, L, a, b, n=1):
-        allc = [(c, d) for d in pantone_decks() for c in d['colors']]
+    def _deck_file(self):
+        return os.path.join(os.path.dirname(PALETTES_FILE), 'pc_deck.json')
+
+    def _deck_load(self):
+        try:
+            with open(self._deck_file(), encoding='utf-8') as f:
+                v = json.load(f).get('deck', '')
+            if v in [d.get('ko') for d in pantone_decks()]:
+                return v
+        except Exception:
+            pass
+        return '모든 견본책'
+
+    def _deck_changed(self):
+        try:
+            with open(self._deck_file(), 'w', encoding='utf-8') as f:
+                json.dump({'deck': self._deck_var.get()}, f, ensure_ascii=False)
+        except Exception:
+            pass
+        for sd in ('ref', 'smp'):
+            try:
+                self._show_nearest_pantone(sd)
+            except Exception:
+                pass
+
+    def _nearest_pantone(self, L, a, b, n=1, deck=None):
+        allc = [(c, d) for d in pantone_decks() if not deck or d.get('ko') == deck for c in d['colors']]
         # 빠른 1차 거르기(ΔE76) 뒤 ΔE2000 으로 다시 줄 세움
         pre = sorted(allc, key=lambda x: (x[0][1] - L) ** 2 + (x[0][2] - a) ** 2 + (x[0][3] - b) ** 2)[:80]
         sc = sorted(((de2000(L, a, b, c[1], c[2], c[3]), c, d) for c, d in pre), key=lambda x: x[0])
@@ -6525,23 +6561,31 @@ class AdvisorApp(tk.Tk):
             w['pt_var'].set("가장 가까운 팬톤: 측정하면 여기에 나옵니다")
             return
         L, a, b = (sum(m[i] for m in ms) / len(ms) for i in range(3))
+        dk = getattr(self, '_deck_var', None)
+        dk = dk.get() if dk is not None else ''
+        dk = None if dk in ('', '모든 견본책') else dk
         try:
-            hit = self._nearest_pantone(L, a, b)
+            hit = self._nearest_pantone(L, a, b, 3, dk)   # Ver 0.53: 1·2·3순위
         except Exception:
             hit = []
         if not hit:
             w['pt_var'].set("가장 가까운 팬톤: 팬톤 자료를 읽지 못했습니다")
             return
-        dE, c, d = hit[0]
-        rgb = '#%02x%02x%02x' % lab_to_rgb(c[1], c[2], c[3])
         mine = '#%02x%02x%02x' % lab_to_rgb(L, a, b)
-        w['pt_chip'].create_rectangle(0, 0, 17, 34, fill=mine, outline='')
-        w['pt_chip'].create_rectangle(17, 0, 34, 34, fill=rgb, outline='')
-        feel = ("거의 같음" if dE <= 1 else "자세히 보면 다름" if dE <= 2
-                else "차이가 보임" if dE <= 5 else "다른 색")
-        name = c[0].replace('PANTONE® ', 'PANTONE ')
-        w['pt_var'].set(f"가장 가까운 팬톤: {name}  ΔE {dE:.2f} ({feel})\n"
-                        f"{d['ko']}  ·  누르면 가까운 순서 40색")
+        w['pt_chip'].create_rectangle(0, 0, 20, 52, fill=mine, outline='')
+        w['pt_chip'].create_text(10, 46, text='잰', font=('맑은 고딕', 7), fill='#fff' if L < 55 else '#000')
+        lines = []
+        for i, (dE, c, d) in enumerate(hit):
+            rgb = '#%02x%02x%02x' % lab_to_rgb(c[1], c[2], c[3])
+            x0 = 22 + i * 22
+            w['pt_chip'].create_rectangle(x0, 0, x0 + 20, 52, fill=rgb, outline='#1e3a5f' if i == 0 else '')
+            w['pt_chip'].create_text(x0 + 10, 46, text=str(i + 1), font=('맑은 고딕', 7, 'bold'),
+                                     fill='#fff' if c[1] < 55 else '#000')
+            feel = ("거의 같음" if dE <= 1 else "자세히 보면 다름" if dE <= 2
+                    else "차이가 보임" if dE <= 5 else "다른 색")
+            name = c[0].replace('PANTONE® ', 'PANTONE ')
+            lines.append(f"{i + 1}순위  {name}  ΔE {dE:.2f} ({feel})" + ('' if dk else f"  · {d['ko']}"))
+        w['pt_var'].set("\n".join(lines) + "\n누르면 가까운 순서 40색")
 
     # ---- Ver 0.20: 우리 물건(내 팔레트)에서 가장 비슷한 색 찾기 ----
     def _find_own(self, side):

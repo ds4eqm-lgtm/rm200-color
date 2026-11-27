@@ -105,7 +105,7 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
   </div>
   <div class="card" id="usbcard">
     <button class="big" id="go">기계 연결</button>
-    <div class="msg" id="msg">RM200을 USB 선으로 꽂고 [기계 연결]을 누르십시오. (휴대폰은 USB-C OTG 젠더)</div>
+    <div class="msg" id="msg">RM200을 USB 선으로 꽂고 [기계 연결]을 누르십시오. (모바일 폰은 USB-C OTG 젠더)</div>
     <details style="margin-top:8px"><summary class="dim">기계 대답 기록 (문제 찾기용)</summary><pre id="dbg" style="font-size:11px;white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto;margin:6px 0 0"></pre></details>
   </div>
   <div class="card" id="bulk" style="display:none">
@@ -119,7 +119,7 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
     <div id="bput" class="hidden">
       <input type="text" id="bpal">
       <button class="big" id="bgo" style="margin-top:10px">고른 색 내 팔레트에 넣기</button>
-      <p class="note" style="margin:6px 0 0">공용 저장소의 내 팔레트에 넣고 [함께 본 기록]에도 올립니다. PC 프로그램과 다른 휴대폰에서 바로 보입니다.</p>
+      <p class="note" style="margin:6px 0 0">공용 저장소의 내 팔레트에 넣고 [함께 본 기록]에도 올립니다. PC 프로그램과 다른 모바일 폰에서 바로 보입니다.</p>
     </div>
   </div>
   <div class="card" id="cal">
@@ -155,7 +155,7 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
     <button class="sub" id="dfd" style="margin:0">팬덱 목록 읽기</button>
     <div id="dfd_o" style="margin-top:6px"></div></div>
   <div class="card"><h4>팬덱 새 판 확인</h4>
-    <p class="note" style="margin:0 0 8px">기계 안 팬덱의 판 번호를 엑스라이트 서버의 최신 판과 비교합니다. 서버 판 번호는 PC 프로그램이 [팬덱 새 판 확인]을 할 때 공용 저장소에 남긴 것을 씁니다(휴대폰 브라우저는 엑스라이트 서버에 직접 물을 수 없음). 기계에 새 판을 넣는 일은 PC 프로그램에서 합니다.</p>
+    <p class="note" style="margin:0 0 8px">기계 안 팬덱의 판 번호를 엑스라이트 서버의 최신 판과 비교합니다. 서버 판 번호는 PC 프로그램이 [팬덱 새 판 확인]을 할 때 공용 저장소에 남긴 것을 씁니다(모바일 폰 브라우저는 엑스라이트 서버에 직접 물을 수 없음). 기계에 새 판을 넣는 일은 PC 프로그램에서 합니다.</p>
     <button class="sub" id="dver" style="margin:0">팬덱 새 판 확인</button>
     <div id="dver_o" style="margin-top:8px"></div></div>
 </section>
@@ -172,7 +172,7 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
   <input type="search" id="pq" placeholder="예: 17-3938, 179 C, 2925">
   <div id="pres" style="margin-top:8px"></div></div>
   <div class="card"><h4>사진에서 색 고르기</h4>
-  <p class="note" style="margin:0 0 8px">휴대폰으로 찍은 사진을 고르면 사진 가운데 색과 비슷한 팬톤색을 바로 골라 드립니다. 다른 곳을 알고 싶으면 사진 위 그 곳을 누르십시오. 사진은 빛과 카메라에 따라 색이 달라지므로 대강 찾는 데 쓰시고, 정확한 색은 기계로 재십시오.</p>
+  <p class="note" style="margin:0 0 8px">모바일 폰으로 찍은 사진을 고르면 사진 가운데 색과 비슷한 팬톤색을 바로 골라 드립니다. 다른 곳을 알고 싶으면 사진 위 그 곳을 누르십시오. 사진은 빛과 카메라에 따라 색이 달라지므로 대강 찾는 데 쓰시고, 정확한 색은 기계로 재십시오.</p>
   <label class="sub" style="display:block;text-align:center;cursor:pointer;margin:0">사진 고르기<input type="file" id="pfile" accept="image/*" style="display:none"></label>
   <div id="pwrap" class="hidden" style="position:relative;margin-top:10px"><canvas id="pcv" style="width:100%;border-radius:10px;touch-action:manipulation"></canvas><div id="pmark"></div></div>
   <div id="ppick" style="margin-top:8px"></div></div>
@@ -208,7 +208,7 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
 </div></div>
 <div id="qrbox" style="position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:16">
   <div style="background:#fff;border-radius:16px;padding:20px;text-align:center;max-width:92vw">
-    <b style="font-size:17px">휴대폰 카메라로 찍으면 바로 열립니다</b>
+    <b style="font-size:17px">모바일 폰 카메라로 찍으면 바로 열립니다</b>
     <div id="qrimg" style="margin:14px auto"></div>
     <div class="dim" id="qrurl" style="word-break:break-all"></div>
     <button class="sub" id="qrsave">그림으로 저장</button>
@@ -220,7 +220,7 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
 <script src="qrcode.js"></script>
 <script>
 'use strict';
-const VER = '0.52';
+const VER = '0.53';
 const VID = 0x0765, PID = 0x6001;
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -506,7 +506,7 @@ $('newvb').onclick = async () => {
     : `<b style="color:#c62828">마지막 서버 확인이 ${days}일 전입니다.</b> PC 프로그램을 기계에 한 번 연결하면 다시 확인합니다. (${esc(x.checked)} · ${esc(x.by || '')})`;
   $('pdet').innerHTML = `<div class="code" style="font-size:21px">${!ok ? '인터넷에 닿지 않습니다' : nw.length ? '새 판이 있습니다' : '새 판이 없습니다'}</div><div class="msg">${live}</div>`
     + (nw.length ? nw.map(f => `<div class="row"><div>${esc(f.desc || f.sku || '')}<div class="dim">기계 판 ${esc(f.dev || '?')} → 새 판 ${esc(f.ver || '')}</div></div></div>`).join('') + '<p class="note">새 판을 기계에 넣는 일은 PC 프로그램에서 합니다.</p>'
-      : '<p class="note">기계 안 팬덱(2021년 8월 판)보다 새로운 판이 서버에 없습니다. 이 기계(팬톤 CAPSURE)는 판매가 끝난 모델이라 새 판이 더 나오지 않을 수 있습니다. 휴대폰은 엑스라이트 서버에 직접 물을 수 없어서, PC 프로그램이 기계에 연결될 때마다 물어 본 결과를 보여 줍니다.</p>')
+      : '<p class="note">기계 안 팬덱(2021년 8월 판)보다 새로운 판이 서버에 없습니다. 이 기계(팬톤 CAPSURE)는 판매가 끝난 모델이라 새 판이 더 나오지 않을 수 있습니다. 모바일 폰은 엑스라이트 서버에 직접 물을 수 없어서, PC 프로그램이 기계에 연결될 때마다 물어 본 결과를 보여 줍니다.</p>')
     + '<button class="sub" id="pdetx">닫기</button>';
   $('pdet').classList.remove('hidden'); $('pdetx').onclick = () => $('pdet').classList.add('hidden');
 };
