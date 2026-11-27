@@ -182,6 +182,8 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
 </section>
 <div class="card note">
   <button class="sub" id="inst" style="margin-top:0">홈 화면(바탕화면)에 바로가기</button>
+  <a class="sub hidden" id="apkget" style="text-align:center;text-decoration:none;margin-top:8px;box-sizing:border-box" href="https://github.com/ds4eqm-lgtm/rm200-color/raw/main/download/rm200-app.apk">안드로이드 앱(APK) 받아 설치</a>
+  <div class="note hidden" id="apknote" style="margin-top:6px">설치 앱은 RM200을 꽂으면 저절로 열리고, 기계 연결을 한 번만 허락하면 됩니다. 앱 화면과 기능은 이 화면과 같고, 새 판도 저절로 받습니다.</div>
 </div>
 </main>
 <footer>
@@ -219,8 +221,35 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
 <div id="toast"></div>
 <script src="qrcode.js"></script>
 <script>
+// Ver 0.54: 안드로이드 설치 앱(APK) 안에서는 브라우저의 WebUSB 대신 앱이 USB를 직접 다룸(같은 모양으로 감쌈)
+(function(){
+  if (!window.RMUSB || ('usb' in navigator)) return;
+  const CB = {}; let seq = 0, DEV = null; const L = {connect: [], disconnect: []};
+  window.__rmusb = (id, ok, v) => { const c = CB[id]; delete CB[id]; if (!c) return; if (ok) c[0](v); else { const e = new Error(v); if (/^NotFound/.test(v)) e.name = 'NotFoundError'; c[1](e); } };
+  const call = (fn, ...a) => new Promise((res, rej) => { const id = ++seq; CB[id] = [res, rej]; try { RMUSB[fn](id, ...a); } catch(e){ delete CB[id]; rej(e); } });
+  const hx = d => Array.from(d instanceof Uint8Array ? d : new Uint8Array(d.buffer || d), x => x.toString(16).padStart(2, '0')).join('');
+  const uh = h => { const b = new Uint8Array(h.length / 2); for (let i = 0; i < b.length; i++) b[i] = parseInt(h.substr(i * 2, 2), 16); return b; };
+  function mk(){
+    if (DEV) return DEV;
+    DEV = {vendorId: 0x0765, productId: 0x6001, productName: 'RM200', configuration: {configurationValue: 1},
+      open: () => call('open'), close: () => call('close'), selectConfiguration: async () => {}, claimInterface: async () => {}, releaseInterface: async () => {},
+      controlTransferOut: s => call('ctrl', s.request, s.value, s.index).then(() => ({status: 'ok'})),
+      transferOut: (ep, d) => call('out', ep, hx(d)).then(n => ({status: 'ok', bytesWritten: +n})),
+      transferIn: (ep, len) => call('inp', ep, len, len >= 4096 ? 250 : 4500).then(h => { const b = uh(h); return {status: 'ok', data: new DataView(b.buffer)}; })};
+    return DEV;
+  }
+  window.__rmusbEv = t => {
+    if (t === 'disconnect'){ if (!DEV) return; const d = DEV; DEV = null; L.disconnect.forEach(f => f({device: d})); }
+    else { const had = !!DEV; const d = mk(); if (!had) L.connect.forEach(f => f({device: d})); }
+  };
+  Object.defineProperty(navigator, 'usb', {value: {
+    requestDevice: () => call('request').then(() => mk()),
+    getDevices: () => Promise.resolve(RMUSB.ready() ? [mk()] : []),
+    addEventListener: (t, f) => (L[t] = L[t] || []).push(f)}, configurable: true});
+})();
+
 'use strict';
-const VER = '0.53';
+const VER = '0.54';
 const VID = 0x0765, PID = 0x6001;
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -985,13 +1014,18 @@ $('shok').onclick = async () => {
   toast(/Firefox/.test(UA) ? '주소창 옆 별(☆) 또는 메뉴 → 바로가기로 만드십시오' : /Safari/.test(UA) && /Mac/.test(UA) ? '사파리 메뉴 [파일] → [Dock에 추가]를 누르십시오' : '브라우저 메뉴(⋮) → "홈 화면에 추가" 또는 "앱 설치"를 누르십시오');
 };
 
+if (window.RMAPP){
+  $('inst').onclick = () => { const r = RMAPP.pin(); toast(r === 'ok' ? '바탕화면에 아이콘을 만들었습니다' : '앱 서랍의 RM200 측색계 아이콘을 길게 눌러 홈 화면에 끌어다 놓으십시오'); };
+} else if (IS_ANDROID){ $('apkget').classList.remove('hidden'); $('apkget').style.display = 'block'; $('apknote').classList.remove('hidden'); }
 // ---------------------------------------------------------------- 주소 나눠 주기 (맨 아래 한 곳)
 const URL0 = location.href.split('#')[0].split('?')[0];
 document.querySelectorAll('[data-s]').forEach(b => b.onclick = async () => {
   const s = b.dataset.s;
   try { await navigator.clipboard.writeText(URL0); } catch(e){}
+  if (window.RMAPP) RMAPP.copy(URL0);
   if (s === 'copy') return toast('주소를 복사했습니다');
   if (s === 'qr') return showQR(URL0);
+  if (window.RMAPP) return RMAPP.share(s, 'RM200 측색계 앱 ' + URL0);
   if (s === 'sms') return location.href = 'sms:' + (IS_IOS ? '&' : '?') + 'body=' + encodeURIComponent('RM200 측색계 앱 ' + URL0);
   if (s === 'kakao' && IS_ANDROID) return location.href = 'intent://send#Intent;scheme=kakaolink;package=com.kakao.talk;end';
   if (s === 'kakao' && IS_IOS) return location.href = 'kakaotalk://';
@@ -1013,7 +1047,7 @@ function showQR(url){
   const c = qrCanvas(url, 300);
   $('qrimg').innerHTML = ''; $('qrimg').appendChild(c); $('qrurl').textContent = url;
   $('qrbox').style.display = 'flex';
-  $('qrsave').onclick = () => { const a = document.createElement('a'); a.href = c.toDataURL('image/png'); a.download = 'RM200_app_QR.png'; document.body.appendChild(a); a.click(); a.remove(); };
+  $('qrsave').onclick = () => { if (window.RMAPP){ toast(RMAPP.saveImage(c.toDataURL('image/png'), 'RM200_app_QR.png') ? '사진첩(Pictures)에 저장했습니다' : '저장하지 못했습니다'); return; } const a = document.createElement('a'); a.href = c.toDataURL('image/png'); a.download = 'RM200_app_QR.png'; document.body.appendChild(a); a.click(); a.remove(); };
 }
 $('qrno').onclick = () => $('qrbox').style.display = 'none';
 $('qrbox').onclick = e => { if (e.target.id === 'qrbox') $('qrbox').style.display = 'none'; };
