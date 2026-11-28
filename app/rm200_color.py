@@ -768,12 +768,12 @@ class AdvisorApp(tk.Tk):
                       ("USB 다시 연결 (뽑았다 꽂은 것처럼)", lambda: self._usb_reset()),
                       ("USB 드라이버 바꾸기 (새 PC에서 한 번)", lambda: self._driver_offer(force=True)),
                       ("잘못 바뀐 USB 장치 되돌리기 (마우스·블루투스 등)", lambda: self._wrong_check(quiet=False)), None,
-                      ("기계 정보", lambda: self._notebook.select(3))]),
+                      ("기계 정보", lambda: self._tab_go('기계 정보'))]),
             ("도구", [("기계 화면 사진 저장...", self._menu_screenshot),
                       ("온도 읽기", self._menu_temperature),
-                      ("실시간 화면", lambda: self._notebook.select(8)),
+                      ("실시간 화면", lambda: self._tab_go('실시간 화면')),
                       ("기계 원격 단추 (PC에서 기계 단추 누르기)", lambda: self._open_remote()), None,
-                      ("팬톤 색 보기", lambda: self._notebook.select(2)),
+                      ("팬톤 색 보기", lambda: self._tab_go('팬톤 색 보기')),
                       ("인터넷 표준 시각과 동기화", self._on_sync_time),
                       ("새 판 확인 (깃허브)", lambda: self._upd_check(manual=True)),
                       ("이름 바꾸기 되돌리기", lambda: self._rename_undo()),
@@ -922,8 +922,13 @@ class AdvisorApp(tk.Tk):
         self._tab_screen_keys(self._notebook)   # 6
         self._tab_preview(self._notebook)       # 7
         self._tab_pantone(self._notebook)       # 2 로 끼워 넣음
-        self._tab_cm(self._notebook)            # Ver 0.21: 맨 끝 "이색 관리"
+        self._tab_cm(self._notebook)            # Ver 0.21: "이색 관리"
+        self._tab_photo(self._notebook)         # Ver 0.58: "사진으로 찾기"
+        # Ver 0.58: 이 프로그램의 주된 일 = 이색 관리 → 맨 앞, 컬러 찾기·비교, 사진으로 찾기 차례
+        self._notebook.insert(0, self._cm_frame)
+        self._notebook.insert(2, self._ph_frame)
         self._build_tab_buttons()
+        self._notebook.select(0)
 
     # ---- 0.4: 윗줄(버전, 연결 불빛, 기계 시각, 표준 시각 맞추기) ----
     def _build_top_bar(self):
@@ -1438,6 +1443,7 @@ class AdvisorApp(tk.Tk):
                         pass
                 if 'cm' in out and snap.get('cm') is not None and out['cm'] != snap['cm']:
                     self.cm = cloud.map_to_cm(out['cm'])
+                    self._cm_norm()
                     self._cm_save()
                     try:
                         self._cm_refresh()
@@ -1965,10 +1971,10 @@ class AdvisorApp(tk.Tk):
                       activebackground='#1557b0', activeforeground='white', cursor='hand2',
                       font=('맑은 고딕', 10, 'bold'), padx=8, pady=3).pack(side=tk.LEFT, padx=(0, 6))
         b("다시 읽기", self._devmenu_read)
-        b("조리개 바꾸기", lambda: self._notebook.select(3), '#455a64')
+        b("조리개 바꾸기", lambda: self._tab_go('기계 정보'), '#455a64')
         b("기계 시각 맞추기", self._on_sync_time, '#455a64')
         row = tk.Frame(parent, bg='#ffffff'); row.pack(anchor='w', pady=(0, 6))
-        b("팬덱 켜기·끄기", lambda: self._notebook.select(5), '#455a64')
+        b("팬덱 켜기·끄기", lambda: self._tab_go('팬덱'), '#455a64')
         b("0점 맞추기", self._auto_calibrate, '#455a64')
         tk.Label(parent, text="기계 안의 설정(언어, 밝기, 소리, 꺼짐 시간 등)은 PC에서 바로 바꾸는 명령이 없습니다.\n"
                               "왼쪽 기계 화면을 보면서 단추나 키보드로 기계의 설정 메뉴에 들어가 바꾸면 됩니다.\n"
@@ -3090,7 +3096,7 @@ class AdvisorApp(tk.Tk):
 
     def _tab_measurement(self, nb):
         frame = ttk.Frame(nb, padding=8)
-        nb.add(frame, text="측정·비교")
+        nb.add(frame, text="컬러 찾기·비교")
 
         top = ttk.Frame(frame)
         top.pack(fill=tk.BOTH, expand=True)
@@ -3223,7 +3229,7 @@ class AdvisorApp(tk.Tk):
         ptr = tk.Frame(frame, bg='#eef4ff', cursor='hand2', highlightthickness=1,
                        highlightbackground='#9bbcf0')
         ptr.pack(fill=tk.X, pady=(2, 4))
-        w['pt_chip'] = tk.Canvas(ptr, width=86, height=52, bg='#eef4ff', highlightthickness=0,
+        w['pt_chip'] = tk.Canvas(ptr, width=132, height=52, bg='#eef4ff', highlightthickness=0,
                                  cursor='hand2')
         w['pt_chip'].pack(side=tk.LEFT, padx=(4, 6), pady=3)
         w['pt_var'] = tk.StringVar(value="가장 가까운 팬톤: 측정하면 여기에 나옵니다")
@@ -3238,9 +3244,12 @@ class AdvisorApp(tk.Tk):
         tk.Label(dkr, text="찾을 견본책:", font=('맑은 고딕', 9)).pack(side=tk.LEFT)
         if not hasattr(self, '_deck_var'):
             self._deck_var = tk.StringVar(value=self._deck_load())
-        cb = ttk.Combobox(dkr, textvariable=self._deck_var, state='readonly', width=24,
-                          values=['모든 견본책'] + [d.get('ko', '') for d in pantone_decks()])
+        cb = ttk.Combobox(dkr, textvariable=self._deck_var, state='readonly', width=34,
+                          values=self._deck_values())
         cb.pack(side=tk.LEFT, padx=4)
+        mv = tk.StringVar(value=f"재질: {getattr(self, '_mat_name', '') or '고르지 않음'}")
+        self._mat_vars = getattr(self, '_mat_vars', []) + [mv]
+        ttk.Button(dkr, textvariable=mv, command=lambda: self._mat_window()).pack(side=tk.LEFT, padx=4)
         cb.bind('<<ComboboxSelected>>', lambda e: self._deck_changed())
         w['deck_cb'] = cb
 
@@ -4627,6 +4636,22 @@ class AdvisorApp(tk.Tk):
                 except Exception:
                     pass
                 self.cm = {'items': []}
+        self._cm_norm()
+
+    def _cm_norm(self):
+        """Ver 0.58: 묶음·시료 모양 다듬기 — 시료 번호(잰 차례), 키, 예전 기준값은 그대로 둠."""
+        items = [it for it in (self.cm.get('items') or []) if isinstance(it, dict) and it.get('name')]
+        for it in items:
+            recs = [r for r in (it.get('records') or []) if isinstance(r, dict)]
+            if any(not r.get('no') for r in recs):
+                used = max([int(r.get('no') or 0) for r in recs] + [0])
+                for r in sorted((r for r in recs if not r.get('no')), key=lambda r: str(r.get('date'))):
+                    used += 1; r['no'] = used
+            for r in recs:
+                r.setdefault('_k', f"{r.get('date')}|{r.get('lot')}")
+            it['records'] = recs
+            it.setdefault('ok', 1.0); it.setdefault('warn', 3.0)
+        self.cm = {'items': items}
 
     def _cm_save(self):
         path = self._cm_path()
@@ -4644,50 +4669,84 @@ class AdvisorApp(tk.Tk):
         except Exception as e:
             messagebox.showerror("이색 관리", f"저장하지 못했습니다: {e}")
 
+    # ======================================================================
+    #  Ver 0.58: 이색 관리 (맨 앞 칸). 묶음마다 시료 1~N번, 아무 시료나 원본으로, 합격·불합격 드롭다운.
+    #  모바일 폰 앱과 같은 공용 문서(rm200/cm)를 씀: item = {master, ref(시료 키), ok, warn(불합격 시작), records}
+    # ======================================================================
+    CM_OK_LIST = ['0.3', '0.5', '0.7', '0.8', '1', '1.2', '1.5', '2', '2.5', '3']
+    CM_BAD_LIST = ['1', '1.5', '2', '2.5', '3', '3.5', '4', '5', '6', '8']
+
     def _tab_cm(self, nb):
         self._cm_load()
         frame = ttk.Frame(nb, padding=8)
         nb.add(frame, text="이색 관리")
+        self._cm_frame = frame
         top = ttk.Frame(frame); top.pack(fill=tk.X)
-        ttk.Label(top, text="관리 색:", font=('맑은 고딕', 11)).pack(side=tk.LEFT)
+        ttk.Label(top, text="비교 묶음:", font=('맑은 고딕', 11, 'bold')).pack(side=tk.LEFT)
         self.cm_var = tk.StringVar()
-        self.cm_combo = ttk.Combobox(top, textvariable=self.cm_var, state='readonly', width=26,
+        self.cm_combo = ttk.Combobox(top, textvariable=self.cm_var, state='readonly', width=28,
                                      font=('맑은 고딕', 11))
-        self.cm_combo.pack(side=tk.LEFT, padx=(4, 10))
+        self.cm_combo.pack(side=tk.LEFT, padx=(4, 6))
         self.cm_combo.bind('<<ComboboxSelected>>', lambda e: self._cm_refresh())
-        ttk.Button(top, text="관리 색 추가 (왼쪽 기준색으로)", command=self._cm_add_item).pack(side=tk.LEFT, padx=3)
-        ttk.Button(top, text="관리 색 지우기", command=self._cm_del_item).pack(side=tk.LEFT, padx=3)
-        ttk.Label(top, text="   합격 ΔE ≤", font=('맑은 고딕', 11)).pack(side=tk.LEFT)
-        self.cm_ok = tk.StringVar(value="1.0")
-        ttk.Entry(top, textvariable=self.cm_ok, width=5).pack(side=tk.LEFT, padx=2)
-        ttk.Label(top, text=" 주의 ≤", font=('맑은 고딕', 11)).pack(side=tk.LEFT)
-        self.cm_warn = tk.StringVar(value="2.0")
-        ttk.Entry(top, textvariable=self.cm_warn, width=5).pack(side=tk.LEFT, padx=2)
-        ttk.Button(top, text="기준 저장", command=self._cm_save_tol).pack(side=tk.LEFT, padx=3)
+        ttk.Button(top, text="새 묶음", command=self._cm_add_item).pack(side=tk.LEFT, padx=2)
+        ttk.Button(top, text="묶음 지우기", command=self._cm_del_item).pack(side=tk.LEFT, padx=2)
+        ttk.Label(top, text="    합격 ΔE ≤", font=('맑은 고딕', 11)).pack(side=tk.LEFT)
+        self.cm_ok = tk.StringVar(value="1")
+        cb1 = ttk.Combobox(top, textvariable=self.cm_ok, values=self.CM_OK_LIST, width=5, state='readonly',
+                           font=('맑은 고딕', 11))
+        cb1.pack(side=tk.LEFT, padx=2)
+        ttk.Label(top, text="  불합격 ΔE ≥", font=('맑은 고딕', 11)).pack(side=tk.LEFT)
+        self.cm_warn = tk.StringVar(value="3")
+        cb2 = ttk.Combobox(top, textvariable=self.cm_warn, values=self.CM_BAD_LIST, width=5, state='readonly',
+                           font=('맑은 고딕', 11))
+        cb2.pack(side=tk.LEFT, padx=2)
+        for c in (cb1, cb2):
+            c.bind('<<ComboboxSelected>>', lambda e: self._cm_save_tol())
+        ttk.Label(top, text=" (그 사이는 주의)", foreground='#666').pack(side=tk.LEFT)
         act = ttk.Frame(frame); act.pack(fill=tk.X, pady=(8, 4))
-        tk.Button(act, text="오른쪽 비교색(새 입고)을 장부에 기록", command=self._cm_record,
-                  relief=tk.FLAT, padx=14, pady=4, font=('맑은 고딕', 11, 'bold'), bg='#1e6fd9', fg='white',
-                  activebackground='#1559b0', activeforeground='white', cursor='hand2').pack(side=tk.LEFT)
-        ttk.Button(act, text="고른 기록 지우기", command=self._cm_del_rec).pack(side=tk.LEFT, padx=8)
+
+        def big(t, cmd, bg):
+            tk.Button(act, text=t, command=cmd, relief=tk.FLAT, padx=12, pady=4, font=('맑은 고딕', 11, 'bold'),
+                      bg=bg, fg='white', activebackground=bg, activeforeground='white',
+                      cursor='hand2').pack(side=tk.LEFT, padx=(0, 6))
+        big("지금 재서 시료로 넣기", self._cm_measure_add, '#2e7d32')
+        big("고른 시료를 원본으로", self._cm_set_ref, '#1e3a6e')
+        ttk.Button(act, text="컬러 찾기 칸 오른쪽 색을 시료로", command=lambda: self._cm_record('smp')).pack(side=tk.LEFT, padx=3)
+        ttk.Button(act, text="왼쪽 색을 시료로", command=lambda: self._cm_record('ref')).pack(side=tk.LEFT, padx=3)
+        ttk.Button(act, text="이름 바꾸기", command=self._cm_rename).pack(side=tk.LEFT, padx=3)
+        ttk.Button(act, text="고른 시료 지우기", command=self._cm_del_rec).pack(side=tk.LEFT, padx=3)
         ttk.Button(act, text="엑셀로 내보내기...", command=self._cm_export).pack(side=tk.LEFT, padx=3)
+        mrow = tk.Frame(frame); mrow.pack(fill=tk.X, pady=(2, 2))
+        self.cm_master_cv = tk.Canvas(mrow, width=120, height=44, highlightthickness=1, highlightbackground='#888')
+        self.cm_master_cv.pack(side=tk.LEFT, padx=(0, 8))
         self.cm_info = tk.StringVar(value="")
-        ttk.Label(frame, textvariable=self.cm_info, font=('맑은 고딕', 10), foreground='#555').pack(anchor='w')
+        ttk.Label(mrow, textvariable=self.cm_info, font=('맑은 고딕', 11, 'bold'), foreground='#1e3a5f',
+                  justify=tk.LEFT).pack(side=tk.LEFT, anchor='w')
+        self.cm_sum = tk.StringVar(value="")
+        ttk.Label(frame, textvariable=self.cm_sum, font=('맑은 고딕', 11)).pack(anchor='w')
         body = ttk.Frame(frame); body.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
-        cols = ('date', 'lot', 'n', 'dE', 'dL', 'da', 'db', 'verdict', 'dir')
-        self.cm_tree = ttk.Treeview(body, columns=cols, show='headings', height=9, selectmode='extended')
-        for c, t, w in (('date', '날짜', 140), ('lot', '입고 번호·메모', 150), ('n', '잰 횟수', 60),
-                        ('dE', 'ΔE2000', 70), ('dL', 'ΔL 밝기', 70), ('da', 'Δa 빨강', 70),
-                        ('db', 'Δb 노랑', 70), ('verdict', '판정', 60), ('dir', '어느 쪽으로', 220)):
+        cols = ('no', 'date', 'lot', 'dE', 'verdict', 'dir', 'dL', 'da', 'db', 'src')
+        self.cm_tree = ttk.Treeview(body, columns=cols, show='headings', height=10, selectmode='extended')
+        for c, t, w in (('no', '번호', 60), ('date', '잰 때', 130), ('lot', '이름·로트', 170), ('dE', 'ΔE2000', 70),
+                        ('verdict', '판정', 70), ('dir', '원본보다', 180), ('dL', 'ΔL 밝기', 65),
+                        ('da', 'Δa 빨강', 65), ('db', 'Δb 노랑', 65), ('src', '넣은 곳', 80)):
             self.cm_tree.heading(c, text=t)
-            self.cm_tree.column(c, width=w, anchor='w' if c in ('date', 'lot', 'dir') else 'center')
-        for tg, bg in (('ok', '#e6f4e6'), ('warn', '#fff3e0'), ('bad', '#fde4e4')):
+            self.cm_tree.column(c, width=w, anchor='w' if c in ('date', 'lot', 'dir', 'src') else 'center')
+        for tg, bg in (('ok', '#e6f4e6'), ('warn', '#fff3e0'), ('bad', '#fde4e4'), ('ref', '#dfe8f7')):
             self.cm_tree.tag_configure(tg, background=bg)
         self.cm_tree.pack(side=tk.TOP, fill=tk.X)
-        self.cm_chart = tk.Canvas(body, height=210, bg='#ffffff', highlightthickness=1,
+        self.cm_tree.bind('<Double-1>', lambda e: self._cm_set_ref())
+        self.cm_chart = tk.Canvas(body, height=200, bg='#ffffff', highlightthickness=1,
                                   highlightbackground='#d5dbe5')
         self.cm_chart.pack(side=tk.TOP, fill=tk.BOTH, expand=True, pady=(8, 0))
         self.cm_chart.bind('<Configure>', lambda e: self._cm_draw_chart())
+        tk.Label(frame, text="시료를 두 번 누르거나 고른 뒤 [고른 시료를 원본으로]를 누르면 원본이 바뀌고 모든 시료가 다시 매겨집니다. "
+                 "모바일 폰 앱 [이색 관리]와 같은 자료입니다.", fg='#666', font=('맑은 고딕', 9)).pack(anchor='w', pady=(4, 0))
         self._cm_fill_combo()
+
+    @staticmethod
+    def _cm_is_item(v):
+        return isinstance(v, dict) and ('records' in v or 'master' in v)
 
     def _cm_item(self):
         n = self.cm_var.get()
@@ -4702,12 +4761,16 @@ class AdvisorApp(tk.Tk):
         if select in names:
             self.cm_var.set(select)
         elif self.cm_var.get() not in names:
-            self.cm_var.set(names[0] if names else '')
+            self.cm_var.set(names[-1] if names else '')
         self._cm_refresh()
 
     def _cm_tol(self, it=None):
         it = it or self._cm_item() or {}
-        return float(it.get('ok', 1.0)), float(it.get('warn', 2.0))
+        return float(it.get('ok', 1.0) or 1.0), float(it.get('warn', 3.0) or 3.0)
+
+    def _cm_verdict(self, dE, it=None):
+        ok, bad = self._cm_tol(it)
+        return '합격' if dE <= ok else '주의' if dE < bad else '불합격'
 
     @staticmethod
     def _cm_dir(dL, da, db):
@@ -4720,24 +4783,64 @@ class AdvisorApp(tk.Tk):
             out.append("더 누러움" if db > 0 else "더 푸름")
         return ", ".join(out) or "거의 같음"
 
+    @staticmethod
+    def _cm_key(r):
+        return r.get('_k') or f"{r.get('date')}|{r.get('lot')}"
+
+    def _cm_recs(self, it):
+        rs = [r for r in it.get('records', []) if isinstance(r, dict) and r.get('lab')]
+        rs.sort(key=lambda r: (r.get('no') or 10 ** 9, str(r.get('date'))))
+        return rs
+
+    def _cm_fix(self, it):
+        """원본 기준으로 모든 시료의 차이 값을 다시 매김(앱·예전 판도 같은 값을 봄)."""
+        m = it.get('master')
+        if not m:
+            return
+        mL, ma, mb = m
+        for r in it.get('records', []):
+            if r.get('lab'):
+                L, a, b = r['lab']
+                r['dE'] = round(de2000(mL, ma, mb, L, a, b), 3)
+                r['dL'], r['da'], r['db'] = L - mL, a - ma, b - mb
+
     def _cm_refresh(self):
         it = self._cm_item()
         self.cm_tree.delete(*self.cm_tree.get_children())
+        self.cm_master_cv.delete('all')
+        self.cm_sum.set("")
         if not it:
-            self.cm_info.set("관리 색이 없습니다. 측정·비교 왼쪽에 기준 견본(마스터)을 재 넣고 [관리 색 추가]를 누르십시오.")
+            self.cm_info.set("비교 묶음이 없습니다. [새 묶음]을 누르거나 [지금 재서 시료로 넣기]를 누르면 오늘 날짜 묶음이 생깁니다.")
             self._cm_draw_chart()
             return
-        ok, warn = self._cm_tol(it)
-        self.cm_ok.set(f"{ok:g}"); self.cm_warn.set(f"{warn:g}")
-        L, a, b = it['master']
-        self.cm_info.set(f"기준(마스터) {it['name']}: L {L:.2f}  a {a:.2f}  b {b:.2f}   "
-                         f"(등록 {it.get('created', '')})   기록 {len(it['records'])}개")
-        for i, r in enumerate(it['records']):
-            v = '합격' if r['dE'] <= ok else '주의' if r['dE'] <= warn else '불합격'
-            tg = {'합격': 'ok', '주의': 'warn', '불합격': 'bad'}[v]
-            self.cm_tree.insert('', 'end', iid=str(i), tags=(tg,), values=(
-                r['date'], r.get('lot', ''), r.get('n', 1), f"{r['dE']:.2f}", f"{r['dL']:+.2f}",
-                f"{r['da']:+.2f}", f"{r['db']:+.2f}", v, self._cm_dir(r['dL'], r['da'], r['db'])))
+        ok, bad = self._cm_tol(it)
+        self.cm_ok.set(f"{ok:g}"); self.cm_warn.set(f"{bad:g}")
+        m = it.get('master')
+        rs = self._cm_recs(it)
+        refr = next((r for r in rs if self._cm_key(r) == it.get('ref')), None)
+        if not m:
+            self.cm_info.set(f"'{it['name']}': 아직 시료가 없습니다. 처음 넣는 시료가 1번 원본이 됩니다.")
+        else:
+            self.cm_master_cv.create_rectangle(0, 0, 122, 46, fill='#%02x%02x%02x' % lab_to_rgb(*m), outline='')
+            who = (f"{refr.get('no', '')}번 {refr.get('lot', '')}" if refr else "처음 등록한 기준색")
+            self.cm_info.set(f"원본 ★ {who}   L {m[0]:.2f}  a {m[1]:.2f}  b {m[2]:.2f}   시료 {len(rs)}개")
+        cnt = {'합격': 0, '주의': 0, '불합격': 0}
+        for i, r in enumerate(rs):
+            L, a, b = r['lab']
+            isref = refr is r
+            if m:
+                dE = de2000(m[0], m[1], m[2], L, a, b); dL, da, db = L - m[0], a - m[1], b - m[2]
+            else:
+                dE = dL = da = db = 0.0
+            v = '★ 원본' if isref else self._cm_verdict(dE, it)
+            if not isref and m:
+                cnt[v] += 1
+            tg = 'ref' if isref else {'합격': 'ok', '주의': 'warn', '불합격': 'bad'}[v]
+            self.cm_tree.insert('', 'end', iid=self._cm_key(r), tags=(tg,), values=(
+                r.get('no', ''), r.get('date', ''), r.get('lot', ''), '' if isref else f"{dE:.2f}", v,
+                '' if isref else self._cm_dir(dL, da, db), f"{dL:+.2f}", f"{da:+.2f}", f"{db:+.2f}", r.get('src', '')))
+        if m and rs:
+            self.cm_sum.set(f"합격 {cnt['합격']}   ·   주의 {cnt['주의']}   ·   불합격 {cnt['불합격']}   (합격 ΔE ≤ {ok:g}, 불합격 ΔE ≥ {bad:g})")
         self._cm_draw_chart()
 
     def _cm_draw_chart(self):
@@ -4747,66 +4850,59 @@ class AdvisorApp(tk.Tk):
         c.delete('all')
         it = self._cm_item()
         W = max(300, c.winfo_width()); H = max(150, c.winfo_height())
-        if not it or not it['records']:
-            c.create_text(W / 2, H / 2, text="기록이 쌓이면 여기에 ΔE 변화 그래프가 나옵니다",
+        rs = self._cm_recs(it) if it else []
+        if not it or not it.get('master') or len(rs) < 2:
+            c.create_text(W / 2, H / 2, text="시료가 2개 넘게 쌓이면 여기에 번호별 ΔE 그래프가 나옵니다",
                           fill='#999', font=('맑은 고딕', 11))
             return
-        ok, warn = self._cm_tol(it)
-        rs = it['records']
-        ymax = max(warn * 1.5, max(r['dE'] for r in rs) * 1.15, 1.0)
+        ok, bad = self._cm_tol(it)
+        m = it['master']
+        des = [de2000(m[0], m[1], m[2], *r['lab']) for r in rs]
+        ymax = max(bad * 1.4, max(des) * 1.15, 1.0)
         x0, x1, y0, y1 = 60, W - 20, 20, H - 30
 
         def Y(v):
             return y1 - (y1 - y0) * v / ymax
         c.create_rectangle(x0, Y(ok), x1, y1, fill='#eef8ee', outline='')
-        c.create_rectangle(x0, Y(warn), x1, Y(ok), fill='#fff6e6', outline='')
-        c.create_rectangle(x0, y0, x1, Y(warn), fill='#fdeeee', outline='')
+        c.create_rectangle(x0, Y(bad), x1, Y(ok), fill='#fff6e6', outline='')
+        c.create_rectangle(x0, y0, x1, Y(bad), fill='#fdeeee', outline='')
         c.create_line(x0, y1, x1, y1, fill='#888'); c.create_line(x0, y0, x0, y1, fill='#888')
-        for v, t in ((0, '0'), (ok, f"합격 {ok:g}"), (warn, f"주의 {warn:g}")):
+        for v, t in ((0, '0'), (ok, f"합격 {ok:g}"), (bad, f"불합격 {bad:g}")):
             c.create_line(x0, Y(v), x1, Y(v), fill='#bbb', dash=(3, 3))
             c.create_text(x0 - 4, Y(v), text=t, anchor='e', font=('맑은 고딕', 8), fill='#555')
         n = len(rs)
-        pts = []
-        for i, r in enumerate(rs):
-            x = x0 + 20 + (x1 - x0 - 40) * (i / max(1, n - 1)) if n > 1 else (x0 + x1) / 2
-            pts.append((x, Y(r['dE'])))
-        if n > 1:
-            c.create_line(*[v for p in pts for v in p], fill='#1e6fd9', width=2)
-        for (x, y), r in zip(pts, rs):
-            col = '#2e7d32' if r['dE'] <= ok else '#ef6c00' if r['dE'] <= warn else '#c62828'
+        pts = [(x0 + 20 + (x1 - x0 - 40) * (i / max(1, n - 1)), Y(d)) for i, d in enumerate(des)]
+        c.create_line(*[v for p in pts for v in p], fill='#1e6fd9', width=2)
+        for (x, y), r, d in zip(pts, rs, des):
+            isref = self._cm_key(r) == it.get('ref')
+            col = '#1e3a6e' if isref else '#2e7d32' if d <= ok else '#ef6c00' if d < bad else '#c62828'
             c.create_oval(x - 5, y - 5, x + 5, y + 5, fill=col, outline='white')
-            c.create_text(x, y1 + 12, text=r['date'][5:10], font=('맑은 고딕', 8), fill='#555')
-        c.create_text(x0, 8, anchor='w', text="입고마다 기준색과의 차이 ΔE2000 (낮을수록 같음)",
+            c.create_text(x, y1 + 12, text=str(r.get('no', '')), font=('맑은 고딕', 8), fill='#555')
+        c.create_text(x0, 8, anchor='w', text="시료 번호마다 원본과의 차이 ΔE2000 (낮을수록 같음)",
                       font=('맑은 고딕', 9, 'bold'), fill='#1e3a5f')
 
-    def _cm_add_item(self):
-        ms = self.state_data['ref']['measurements']
-        if not ms:
-            messagebox.showinfo("관리 색 추가",
-                                "먼저 [측정·비교] 왼쪽 기준색에 처음 승인받은 견본(마스터)을\n"
-                                "여러 군데 재서 넣으십시오. 그 평균이 기준이 됩니다.")
-            return
-        name = simpledialog.askstring("관리 색 추가", "관리 색 이름 (예: CM-A 오크):", parent=self)
+    def _cm_add_item(self, name=None):
+        if name is None:
+            name = simpledialog.askstring("새 비교 묶음", "묶음 이름 (예: LVS-1814 11월 납품):", parent=self)
         if not name or not name.strip():
-            return
+            return None
         name = name.strip()
         if any(it['name'] == name for it in self.cm['items']):
-            messagebox.showwarning("관리 색 추가", "같은 이름이 이미 있습니다.")
-            return
-        L, a, b = (sum(m[i] for m in ms) / len(ms) for i in range(3))
-        self.cm['items'].append({'name': name, 'master': [L, a, b], 'n': len(ms),
+            self._cm_fill_combo(select=name)
+            return name
+        self.cm['items'].append({'name': name, 'master': None, 'ref': None,
                                  'created': dt.datetime.now().strftime('%Y-%m-%d %H:%M'),
-                                 'ok': 1.0, 'warn': 2.0, 'records': []})
+                                 'ok': 1.0, 'warn': 3.0, 'records': []})
         self._cm_save()
         self._cm_fill_combo(select=name)
-        self._set_status(f"관리 색 '{name}' 을(를) 기준 {len(ms)}회 평균으로 등록했습니다")
+        return name
 
     def _cm_del_item(self):
         it = self._cm_item()
         if not it:
             return
-        if not messagebox.askyesno("관리 색 지우기",
-                                   f"'{it['name']}' 과 기록 {len(it['records'])}개를 지울까요?"):
+        if not messagebox.askyesno("묶음 지우기",
+                                   f"'{it['name']}' 과 시료 {len(it.get('records', []))}개를 지울까요?"):
             return
         self.cm['items'].remove(it)
         self._cm_save()
@@ -4817,49 +4913,121 @@ class AdvisorApp(tk.Tk):
         if not it:
             return
         try:
-            ok = float(self.cm_ok.get()); warn = float(self.cm_warn.get())
-            if not (0 < ok <= warn):
+            ok = float(self.cm_ok.get()); bad = float(self.cm_warn.get())
+            if not (0 < ok < bad):
                 raise ValueError
         except Exception:
-            messagebox.showerror("이색 관리", "합격 값은 0보다 크고 주의 값보다 작거나 같아야 합니다.")
+            messagebox.showerror("이색 관리", "불합격 값은 합격 값보다 커야 합니다.")
+            self._cm_refresh()
             return
-        it['ok'], it['warn'] = ok, warn
+        it['ok'], it['warn'] = ok, bad
         self._cm_save()
         self._cm_refresh()
+        self._set_status(f"'{it['name']}' 기준: 합격 ΔE ≤ {ok:g}, 불합격 ΔE ≥ {bad:g} — 모든 시료를 다시 매겼습니다")
 
-    def _cm_record(self):
+    def cm_add_sample(self, lab, lot='', src='PC', n=1):
+        """시료 하나를 지금 묶음에 다음 번호로 넣음(묶음 없으면 오늘 날짜로 만듦). 첫 시료는 원본."""
         it = self._cm_item()
         if not it:
-            messagebox.showinfo("이색 관리", "먼저 관리 색을 추가하거나 고르십시오.")
-            return
-        ms = self.state_data['smp']['measurements']
+            self._cm_add_item(f"이색 {dt.date.today():%Y-%m-%d}")
+            it = self._cm_item()
+        recs = it.setdefault('records', [])
+        no = max([int(r.get('no') or 0) for r in recs] + [0]) + 1
+        date = dt.datetime.now().strftime('%Y-%m-%d %H:%M')
+        lot = lot or f"시료 {no}"
+        r = {'no': no, 'date': date, 'lot': lot, 'lab': [round(float(x), 3) for x in lab], 'n': n, 'src': src,
+             'who': getattr(self, '_pc_name', 'PC')}
+        k = f"{date}|{lot}"
+        keys = {self._cm_key(x) for x in recs}
+        while k in keys:
+            k += '+'
+        r['_k'] = k
+        recs.append(r)
+        if not it.get('master'):
+            it['master'] = list(r['lab']); it['ref'] = k
+        self._cm_fix(it)
+        self._cm_save()
+        self._cm_refresh()
+        dE = de2000(*it['master'], *r['lab'])
+        v = '원본' if it.get('ref') == k else self._cm_verdict(dE, it)
+        self._set_status(f"'{it['name']}' {no}번 시료를 넣었습니다: ΔE {dE:.2f} ({v})")
+        return r
+
+    def _cm_record(self, side='smp'):
+        ms = self.state_data[side]['measurements']
         if not ms:
-            messagebox.showinfo("이색 관리", "[측정·비교] 오른쪽 비교색에 새로 들어온 물건을 재 넣으십시오.")
+            messagebox.showinfo("이색 관리", f"[컬러 찾기·비교] {'오른쪽' if side == 'smp' else '왼쪽'} 칸에 시료를 먼저 재 넣으십시오.")
             return
-        lot = simpledialog.askstring("장부에 기록", "입고 번호나 메모 (없으면 비워 두십시오):", parent=self)
+        lot = simpledialog.askstring("시료 넣기", "시료 이름이나 로트 (비워 두면 '시료 번호'):", parent=self)
         if lot is None:
             return
         L, a, b = (sum(m[i] for m in ms) / len(ms) for i in range(3))
-        mL, ma, mb = it['master']
-        dE = de2000(mL, ma, mb, L, a, b)
-        it['records'].append({'date': dt.datetime.now().strftime('%Y-%m-%d %H:%M'), 'lot': lot.strip(),
-                              'lab': [L, a, b], 'n': len(ms), 'dE': dE,
-                              'dL': L - mL, 'da': a - ma, 'db': b - mb})
+        self.cm_add_sample((L, a, b), lot.strip(), 'PC', len(ms))
+
+    def _cm_measure_add(self):
+        """Ver 0.58: 지금 기계로 재서 바로 다음 번호 시료로 넣음."""
+        if not self.connected:
+            messagebox.showerror("이색 관리", "RM200 과 연결되어 있지 않습니다")
+            return
+        if self.busy:
+            return
+        before = len(self.state_data['smp']['measurements'])
+        self._on_measure('smp')
+        t0 = time.time()
+
+        def wait():
+            ms = self.state_data['smp']['measurements']
+            if len(ms) > before:
+                self.cm_add_sample(ms[-1], '', 'PC')
+                return
+            if time.time() - t0 > 90 or (not self.busy and time.time() - t0 > 3):
+                self._set_status("재지 못해 시료를 넣지 않았습니다")
+                return
+            self.after(500, wait)
+        self.after(800, wait)
+
+    def _cm_sel_keys(self):
+        return list(self.cm_tree.selection())
+
+    def _cm_set_ref(self):
+        it = self._cm_item(); sel = self._cm_sel_keys()
+        if not it or len(sel) != 1:
+            messagebox.showinfo("원본 바꾸기", "원본으로 삼을 시료 하나를 표에서 고르십시오.")
+            return
+        r = next((x for x in it.get('records', []) if self._cm_key(x) == sel[0]), None)
+        if not r:
+            return
+        it['master'] = list(r['lab']); it['ref'] = self._cm_key(r)
+        self._cm_fix(it)
         self._cm_save()
         self._cm_refresh()
-        ok, warn = self._cm_tol(it)
-        v = '합격' if dE <= ok else '주의' if dE <= warn else '불합격'
-        self._set_status(f"'{it['name']}' 장부에 기록했습니다: ΔE {dE:.2f} ({v})")
+        self._set_status(f"{r.get('no', '')}번을 원본으로 바꿨습니다. 모든 시료를 다시 매겼습니다")
+
+    def _cm_rename(self):
+        it = self._cm_item(); sel = self._cm_sel_keys()
+        if not it or len(sel) != 1:
+            return
+        r = next((x for x in it.get('records', []) if self._cm_key(x) == sel[0]), None)
+        if not r:
+            return
+        v = simpledialog.askstring("이름 바꾸기", "시료 이름·로트:", initialvalue=r.get('lot', ''), parent=self)
+        if v is None:
+            return
+        r['_k'] = self._cm_key(r)
+        r['lot'] = v.strip()
+        self._cm_save()
+        self._cm_refresh()
 
     def _cm_del_rec(self):
-        it = self._cm_item()
-        sel = sorted((int(i) for i in self.cm_tree.selection()), reverse=True)
+        it = self._cm_item(); sel = set(self._cm_sel_keys())
         if not it or not sel:
             return
-        if not messagebox.askyesno("기록 지우기", f"고른 기록 {len(sel)}개를 지울까요?"):
+        if not messagebox.askyesno("시료 지우기", f"고른 시료 {len(sel)}개를 지울까요?"):
             return
-        for i in sel:
-            del it['records'][i]
+        it['records'] = [r for r in it.get('records', []) if self._cm_key(r) not in sel]
+        if it.get('ref') in sel:
+            it['ref'] = None
+            messagebox.showinfo("시료 지우기", "원본 시료를 지웠습니다. 원본 색 값은 남겨 두었습니다.\n다른 시료를 골라 [고른 시료를 원본으로]를 누르십시오.")
         self._cm_save()
         self._cm_refresh()
 
@@ -4875,19 +5043,22 @@ class AdvisorApp(tk.Tk):
         if not path:
             return
         import csv
-        ok, warn = self._cm_tol(it)
+        ok, bad = self._cm_tol(it)
+        m = it.get('master') or [0, 0, 0]
         with open(path, 'w', encoding='utf-8-sig', newline='') as f:
             w = csv.writer(f)
-            L, a, b = it['master']
-            w.writerow(['관리 색', it['name'], '기준 L', f"{L:.3f}", '기준 a', f"{a:.3f}", '기준 b', f"{b:.3f}",
-                        '합격 ΔE≤', ok, '주의 ΔE≤', warn])
+            w.writerow(['비교 묶음', it['name'], '원본 L', f"{m[0]:.3f}", '원본 a', f"{m[1]:.3f}", '원본 b', f"{m[2]:.3f}",
+                        '합격 ΔE≤', ok, '불합격 ΔE≥', bad])
             w.writerow([])
-            w.writerow(['날짜', '입고 번호·메모', '잰 횟수', 'L', 'a', 'b', 'ΔE2000', 'ΔL', 'Δa', 'Δb', '판정', '어느 쪽으로'])
-            for r in it['records']:
-                v = '합격' if r['dE'] <= ok else '주의' if r['dE'] <= warn else '불합격'
-                w.writerow([r['date'], r.get('lot', ''), r.get('n', 1)] + [f"{x:.3f}" for x in r['lab']] +
-                           [f"{r['dE']:.2f}", f"{r['dL']:+.2f}", f"{r['da']:+.2f}", f"{r['db']:+.2f}", v,
-                            self._cm_dir(r['dL'], r['da'], r['db'])])
+            w.writerow(['번호', '잰 때', '이름·로트', 'L', 'a', 'b', 'ΔE2000', 'ΔL', 'Δa', 'Δb', '판정', '원본보다', '넣은 곳'])
+            for r in self._cm_recs(it):
+                L, a, b = r['lab']
+                isref = self._cm_key(r) == it.get('ref')
+                dE = de2000(*m, L, a, b)
+                w.writerow([r.get('no', ''), r.get('date', ''), r.get('lot', '')] + [f"{x:.3f}" for x in r['lab']] +
+                           [f"{dE:.2f}", f"{L - m[0]:+.2f}", f"{a - m[1]:+.2f}", f"{b - m[2]:+.2f}",
+                            '원본' if isref else self._cm_verdict(dE, it),
+                            '' if isref else self._cm_dir(L - m[0], a - m[1], b - m[2]), r.get('src', '')])
         self._set_status(f"내보냈습니다: {path}")
 
     def _tab_pantone(self, nb):
@@ -5107,7 +5278,7 @@ class AdvisorApp(tk.Tk):
         self.preview_info = tk.StringVar(value="-")
         tk.Label(side, textvariable=self.preview_info, justify=tk.LEFT, wraplength=260,
                  font=('맑은 고딕', 10)).pack(anchor='w')
-        tk.Label(side, text="카메라 색은 조명·화면 때문에 대략입니다.\n정확한 색은 [측정·비교]에서 측정하십시오.\n"
+        tk.Label(side, text="카메라 색은 조명·화면 때문에 대략입니다.\n정확한 색은 [컬러 찾기·비교]에서 측정하십시오.\n"
                             "+ 를 재려는 자리에 맞춘 뒤 측정하면 됩니다.",
                  justify=tk.LEFT, fg='#777', font=('맑은 고딕', 9)).pack(anchor='w', pady=(10, 0))
         self.preview_canvas.create_text(320, 240, text="실시간 화면이 꺼져 있습니다",
@@ -5540,7 +5711,7 @@ class AdvisorApp(tk.Tk):
         threading.Thread(target=worker, daemon=True).start()
 
     def _menu_screenshot(self):
-        self._notebook.select(7)
+        self._tab_go('기계 화면')
         self._on_screen_screenshot()
 
     def _menu_temperature(self):
@@ -6525,17 +6696,20 @@ class AdvisorApp(tk.Tk):
     def _deck_load(self):
         try:
             with open(self._deck_file(), encoding='utf-8') as f:
-                v = json.load(f).get('deck', '')
-            if v in [d.get('ko') for d in pantone_decks()]:
-                return v
+                js = json.load(f)
+            self._mat_name = js.get('mat', '') if any(m['n'] == js.get('mat') for m in self._mats().get('m', [])) else ''
+            v = self._deck_plain(js.get('deck', ''))
+            for x in self._deck_values():
+                if self._deck_plain(x) == v:
+                    return x
         except Exception:
             pass
-        return '모든 견본책'
+        return self.DECK_AUTO
 
     def _deck_changed(self):
         try:
             with open(self._deck_file(), 'w', encoding='utf-8') as f:
-                json.dump({'deck': self._deck_var.get()}, f, ensure_ascii=False)
+                json.dump({'deck': self._deck_var.get(), 'mat': getattr(self, '_mat_name', '')}, f, ensure_ascii=False)
         except Exception:
             pass
         for sd in ('ref', 'smp'):
@@ -6561,11 +6735,10 @@ class AdvisorApp(tk.Tk):
             w['pt_var'].set("가장 가까운 팬톤: 측정하면 여기에 나옵니다")
             return
         L, a, b = (sum(m[i] for m in ms) / len(ms) for i in range(3))
-        dk = getattr(self, '_deck_var', None)
-        dk = dk.get() if dk is not None else ''
-        dk = None if dk in ('', '모든 견본책') else dk
+        keys = self._deck_keys()
+        dk = keys[0]
         try:
-            hit = self._nearest_pantone(L, a, b, 3, dk)   # Ver 0.53: 1·2·3순위
+            hit = [(dE, (nm, lab[0], lab[1], lab[2]), {'ko': dkn}) for dE, nm, dkn, lab in self._rank_for(L, a, b, dk, 5)]   # Ver 0.58: 1~5순위
         except Exception:
             hit = []
         if not hit:
@@ -6585,7 +6758,14 @@ class AdvisorApp(tk.Tk):
                     else "차이가 보임" if dE <= 5 else "다른 색")
             name = c[0].replace('PANTONE® ', 'PANTONE ')
             lines.append(f"{i + 1}순위  {name}  ΔE {dE:.2f} ({feel})" + ('' if dk else f"  · {d['ko']}"))
-        w['pt_var'].set("\n".join(lines) + "\n누르면 가까운 순서 40색")
+        mat = self._mat_get()
+        more = []
+        for k in keys[1:3]:
+            h2 = self._rank_for(L, a, b, k, 1)
+            if h2:
+                more.append(f"{k if not k.startswith('pal:') else k[4:]} 1순위 {h2[0][1]} ΔE {h2[0][0]:.2f}")
+        head = (f"재질 {mat['n']} → " if mat else "") + self._deck_label(dk)
+        w['pt_var'].set(head + "\n" + "\n".join(lines) + ("\n다음 견본책: " + " / ".join(more) if more else "") + "\n누르면 가까운 순서 40색")
 
     # ---- Ver 0.20: 우리 물건(내 팔레트)에서 가장 비슷한 색 찾기 ----
     def _find_own(self, side):
@@ -6664,6 +6844,501 @@ class AdvisorApp(tk.Tk):
                   font=('맑은 고딕', 11), cursor='hand2').pack(pady=(4, 12))
         fill()
 
+    # ======================================================================
+    #  Ver 0.58: 무엇을 재나요(재질 215가지) · 내가 가진 견본책 · 모든 견본책 1~5순위
+    # ======================================================================
+    DECK_AUTO, DECK_OWN, DECK_ALL = '재질에 맞춰 (재질 없으면 모든 견본책)', '내가 가진 견본책 8권', '모든 견본책'
+
+    def _mats(self):
+        if getattr(self, '_mats_cache', None) is None:
+            try:
+                with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'materials.json'), encoding='utf-8') as f:
+                    self._mats_cache = json.load(f)
+            except Exception:
+                self._mats_cache = {'groups': [], 'own': [], 'm': []}
+        return self._mats_cache
+
+    def _deck_values(self):
+        own = {}
+        for o in self._mats().get('own', []):
+            if o.get('k'):
+                own.setdefault(o['k'], []).append(o['ko'])
+        return [self.DECK_AUTO, self.DECK_OWN, self.DECK_ALL] + [
+            d.get('ko', '') + (f"  ★ {', '.join(own[d.get('ko')])}" if d.get('ko') in own else '') for d in pantone_decks()]
+
+    @staticmethod
+    def _deck_plain(v):
+        return (v or '').split('  ★ ')[0]
+
+    def _mat_get(self):
+        n = getattr(self, '_mat_name', '')
+        return next((m for m in self._mats().get('m', []) if m['n'] == n), None)
+
+    def _own_pal_books(self):
+        out = []
+        for o in self._mats().get('own', []):
+            p = o.get('pal')
+            if p and any((k == p or k.startswith(p + '/')) and self.palettes[k].get('entries') for k in self.palettes):
+                out.append('pal:' + p)
+        return out
+
+    def _deck_keys(self, sel=None):
+        """찾을 견본책 차례. None = 모든 견본책, 'pal:이름' = 내 팔레트에 직접 재서 넣은 견본책."""
+        sel = self._deck_plain(sel if sel is not None else (self._deck_var.get() if hasattr(self, '_deck_var') else ''))
+        mat = self._mat_get()
+        if sel == self.DECK_ALL:
+            return [None]
+        if sel == self.DECK_OWN:
+            ks = []
+            for o in self._mats().get('own', []):
+                if o.get('k') and o['k'] not in ks:
+                    ks.append(o['k'])
+            pref = (mat or {}).get('d', [])
+            ks.sort(key=lambda k: pref.index(k) if k in pref else 9)
+            return ks + self._own_pal_books()
+        if sel and sel != self.DECK_AUTO:
+            return [sel]
+        if mat and mat.get('d'):
+            return list(mat['d'])
+        return [None]
+
+    def _rank_for(self, L, a, b, key, n=5):
+        """[(ΔE, 이름, 견본책 이름, lab)]"""
+        if key and key.startswith('pal:'):
+            p = key[4:]
+            items = [(e['name'], tuple(e['lab']), k) for k in self.palettes if k == p or k.startswith(p + '/')
+                     for e in self.palettes[k].get('entries', [])]
+            sc = sorted(((de2000(L, a, b, *lab), nm, k, lab) for nm, lab, k in items), key=lambda x: x[0])
+            return sc[:n]
+        return [(dE, c[0].replace('PANTONE® ', ''), d.get('ko', ''), (c[1], c[2], c[3]))
+                for dE, c, d in self._nearest_pantone(L, a, b, n, key)]
+
+    def _deck_label(self, k):
+        if not k:
+            return '모든 견본책'
+        if k.startswith('pal:'):
+            return k[4:] + ' (직접 잰 칩)'
+        own = [o['ko'] for o in self._mats().get('own', []) if o.get('k') == k]
+        return k + (f" — 가진 책: {', '.join(own)}" if own else '')
+
+    def _mat_window(self, after=None):
+        """재질 고르기 창: 글로 찾기 + 종류별 목록."""
+        mats = self._mats()
+        w = tk.Toplevel(self); w.title("무엇을 재나요? (재질 고르기)"); w.transient(self); w.geometry('560x620')
+        tk.Label(w, text="재는 물건의 재질을 고르면 맞는 팬톤 견본책부터 찾습니다. 글로 써서 찾아도 됩니다.",
+                 font=('맑은 고딕', 10), fg='#444').pack(anchor='w', padx=10, pady=(10, 4))
+        q = tk.StringVar()
+        e = ttk.Entry(w, textvariable=q, font=('맑은 고딕', 12)); e.pack(fill=tk.X, padx=10)
+        e.focus_set()
+        tree = ttk.Treeview(w, show='tree', height=22)
+        tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=6)
+        info = tk.StringVar(value="")
+        tk.Label(w, textvariable=info, justify=tk.LEFT, wraplength=530, fg='#1e3a5f',
+                 font=('맑은 고딕', 10)).pack(anchor='w', padx=10)
+
+        def norm(t):
+            return ''.join(ch for ch in str(t).lower() if ch not in ' ()·,.-_/~!?')
+
+        def score(m, Q):
+            n = norm(m['n']); core = norm(m['n'].split('(')[0])
+            sc = 0
+            if Q in (n, core):
+                sc = 100
+            elif len(core) >= 2 and core in Q:
+                sc = 70 + len(core)
+            elif len(core) == 1 and Q.startswith(core):
+                sc = 55
+            elif Q in n:
+                sc = 60 + len(Q)
+            for al in m['a'].split():
+                A = norm(al)
+                if len(A) < 2:
+                    continue
+                if A == Q:
+                    sc = max(sc, 90)
+                elif A in Q:
+                    sc = max(sc, 50 + len(A))
+                elif Q in A and len(Q) >= 2:
+                    sc = max(sc, 40 + len(Q))
+            return sc
+
+        def fill(*_):
+            tree.delete(*tree.get_children())
+            Q = norm(q.get())
+            if Q:
+                hits = sorted(((score(m, Q), i) for i, m in enumerate(mats['m'])), reverse=True)
+                for sc, i in hits[:30]:
+                    if sc:
+                        tree.insert('', 'end', iid=f"m{i}", text=f"{mats['m'][i]['n']}   ({mats['m'][i]['g']})")
+            else:
+                for g in mats['groups']:
+                    gid = tree.insert('', 'end', text=g, open=False)
+                    for i, m in enumerate(mats['m']):
+                        if m['g'] == g:
+                            tree.insert(gid, 'end', iid=f"m{i}", text=m['n'])
+        q.trace_add('write', fill)
+        fill()
+
+        def show(_=None):
+            s = tree.selection()
+            if s and s[0].startswith('m'):
+                m = mats['m'][int(s[0][1:])]
+                info.set(f"찾는 순서: " + ' → '.join(f"{i + 1} {d}" for i, d in enumerate(m['d'] or ['모든 견본책']))
+                         + (f"\n{m['t']}" if m['t'] else ''))
+        tree.bind('<<TreeviewSelect>>', show)
+
+        def pick(_=None):
+            s = tree.selection()
+            if not (s and s[0].startswith('m')):
+                if not q.get().strip():
+                    return
+                ch = tree.get_children()
+                if not ch:
+                    messagebox.showinfo("재질", "목록에 없습니다. 종류별 목록에서 골라 주십시오.", parent=w)
+                    return
+                s = [ch[0]]
+            self._mat_set(mats['m'][int(s[0][1:])]['n'])
+            w.destroy()
+            if after:
+                after()
+        tree.bind('<Double-1>', pick)
+        e.bind('<Return>', pick)
+        bb = tk.Frame(w); bb.pack(fill=tk.X, padx=10, pady=8)
+        ttk.Button(bb, text="이 재질로", command=pick).pack(side=tk.LEFT)
+        ttk.Button(bb, text="재질 지우기 (모든 견본책)", command=lambda: (self._mat_set(''), w.destroy(), after and after())).pack(side=tk.LEFT, padx=6)
+        ttk.Button(bb, text="닫기", command=w.destroy).pack(side=tk.RIGHT)
+
+    def _mat_set(self, name):
+        self._mat_name = name or ''
+        try:
+            for v in getattr(self, '_mat_vars', []):
+                v.set(f"재질: {self._mat_name or '고르지 않음'}")
+        except Exception:
+            pass
+        self._deck_changed()
+        try:
+            self._ph_redo()
+        except Exception:
+            pass
+
+    # ======================================================================
+    #  Ver 0.58: 사진으로 찾기 (흰 A4 종이로 카메라·불빛 색 바로잡기)
+    # ======================================================================
+    GUIDE_AUTO = ("[색 확인용 사진 찍는 법 - 자동 모드]\n"
+                  "1. 플래시는 끕니다. 해가 직접 들지 않는 창가 낮 빛이나 밝은 흰 형광등 아래에서 찍습니다.\n"
+                  "2. 흰 A4 복사지 한 장을 바닥에 놓고, 모바일 폰을 종이와 나란하게(위에서 똑바로) 30cm 높이에서 찍습니다. 종이가 화면을 가득 채우게 합니다.\n"
+                  "3. 같은 자리, 같은 높이, 같은 불빛에서 본품(시료)을 놓고 찍습니다. 본품이 여러 장이면 한 장씩 같은 방법으로 찍습니다.\n"
+                  "4. 그림자와 반짝이는 반사가 사진에 들어가지 않게 합니다.\n"
+                  "5. 더 정확하게 하려면 흰 종이 위에 본품을 반쯤 걸쳐 올려 한 장에 같이 찍어 주십시오.\n"
+                  "6. 사진은 줄이지 말고 원본 그대로 보내 주십시오(카카오톡은 \"원본\" 으로 보내기).")
+    GUIDE_PRO = ("[색 확인용 사진 찍는 법 - 프로 모드]\n"
+                 "삼성 모바일 폰: 카메라 → 더보기 → 프로 / 아이폰은 자동 모드 안내대로 찍어 주십시오.\n"
+                 "1. 플래시 끔. 해가 직접 들지 않는 창가 낮 빛이나 밝은 흰 형광등 아래.\n"
+                 "2. 화이트밸런스(WB): 5000K~5500K 로 고정 (자동 WB 쓰지 않기)\n"
+                 "3. ISO: 100 (어두우면 200까지)\n"
+                 "4. 셔터 속도: 흰 A4 종이를 찍었을 때 종이가 하얗게 날아가지 않는 값 (보통 실내 1/30~1/60초, 창가 1/125초). 화면의 노출 막대가 0 근처면 됩니다.\n"
+                 "5. 조리개: 모바일 폰이 정한 값 그대로 (바꿀 수 있는 기종이면 F2.4 정도)\n"
+                 "6. 초점: 자동. 모바일 폰은 종이와 나란하게, 30cm 높이.\n"
+                 "7. 위 설정 그대로 흰 A4 종이 한 장 → 같은 자리에서 본품을 한 장씩 찍습니다. 중간에 설정을 바꾸지 않습니다.\n"
+                 "8. 사진은 원본 그대로 보내 주십시오(카카오톡은 \"원본\" 으로 보내기).")
+    PAPER = (95.0, 0.0, -3.0)
+
+    @staticmethod
+    def _s2l(v):
+        v /= 255.0
+        return ((v + 0.055) / 1.055) ** 2.4 if v > 0.04045 else v / 12.92
+
+    @staticmethod
+    def _lin2lab(R, G, B):
+        x = (R * 0.4124 + G * 0.3576 + B * 0.1805) / 0.95047
+        y = R * 0.2126 + G * 0.7152 + B * 0.0722
+        z = (R * 0.0193 + G * 0.1192 + B * 0.9505) / 1.08883
+        h = lambda t: t ** (1 / 3) if t > 0.008856 else 7.787 * t + 16 / 116
+        x, y, z = h(x), h(y), h(z)
+        return (116 * y - 16, 500 * (x - y), 200 * (y - z))
+
+    @staticmethod
+    def _lab2lin(L, a, b):
+        fy = (L + 16) / 116; fx = fy + a / 500; fz = fy - b / 200
+        iv = lambda t: t ** 3 if t ** 3 > 0.008856 else (t - 16 / 116) / 7.787
+        X, Y, Z = 0.95047 * iv(fx), iv(fy), 1.08883 * iv(fz)
+        return (3.2406 * X - 1.5372 * Y - 0.4986 * Z, -0.9689 * X + 1.8758 * Y + 0.0415 * Z,
+                0.0557 * X - 0.2040 * Y + 1.0570 * Z)
+
+    def _area_lin(self, im, x, y, s):
+        """PIL 그림(RGB)에서 (x,y) 둘레 평균 색(선형) + 하얗게 날아간 비율."""
+        W, H = im.size
+        box = (max(0, int(x - s)), max(0, int(y - s)), min(W, int(x + s + 1)), min(H, int(y + s + 1)))
+        px = list(im.crop(box).getdata())
+        if not px:
+            return (0, 0, 0), 0
+        lut = [self._s2l(i) for i in range(256)]
+        n = len(px)
+        R = sum(lut[p[0]] for p in px) / n; G = sum(lut[p[1]] for p in px) / n; B = sum(lut[p[2]] for p in px) / n
+        clip = sum(1 for p in px if max(p[:3]) >= 250) / n
+        return (R, G, B), clip
+
+    def _ph_correct(self, lin, white):
+        if not white:
+            return self._lin2lab(*lin)
+        t = self._lab2lin(*self.PAPER)
+        return self._lin2lab(*[min(1.0, v * t[i] / max(white[i], 1e-4)) for i, v in enumerate(lin)])
+
+    def _tab_photo(self, nb):
+        frame = ttk.Frame(nb, padding=8)
+        nb.add(frame, text="사진으로 찾기")
+        self._ph_frame = frame
+        self._ph = {'white': None, 'white1': None, 'im': None, 'mode': tk.StringVar(value='2'), 'tap': 's',
+                    'last': None, 'files': []}
+        left = ttk.Frame(frame); left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        right = ttk.Frame(frame, width=420); right.pack(side=tk.RIGHT, fill=tk.Y, padx=(8, 0))
+        row = ttk.Frame(left); row.pack(fill=tk.X)
+        ttk.Radiobutton(row, text="사진 두 장 (A4 먼저)", value='2', variable=self._ph['mode'],
+                        command=self._ph_redo).pack(side=tk.LEFT)
+        ttk.Radiobutton(row, text="한 장에 같이 (흰 종이 → 잴 곳 차례로 누르기)", value='1', variable=self._ph['mode'],
+                        command=self._ph_redo).pack(side=tk.LEFT, padx=8)
+        row2 = ttk.Frame(left); row2.pack(fill=tk.X, pady=4)
+        tk.Button(row2, text="① A4 흰 종이 사진 열기", command=self._ph_open_white, relief=tk.FLAT, padx=10,
+                  font=('맑은 고딕', 10, 'bold'), bg='#455a64', fg='white', cursor='hand2').pack(side=tk.LEFT)
+        tk.Button(row2, text="② 본판 사진 열기 (여러 장 가능)", command=self._ph_open, relief=tk.FLAT, padx=10,
+                  font=('맑은 고딕', 10, 'bold'), bg='#1e6fd9', fg='white', cursor='hand2').pack(side=tk.LEFT, padx=6)
+        ttk.Button(row2, text="흰 종이 누르기", command=lambda: self._ph.update(tap='w') or self._set_status("사진 속 흰 종이를 누르십시오")).pack(side=tk.LEFT)
+        self._ph_wst = tk.StringVar(value="아직 흰 종이 사진이 없습니다.")
+        ttk.Label(left, textvariable=self._ph_wst, foreground='#555').pack(anchor='w')
+        self._ph_cv = tk.Canvas(left, bg='#f4f6fa', highlightthickness=1, highlightbackground='#d5dbe5', cursor='crosshair')
+        self._ph_cv.pack(fill=tk.BOTH, expand=True, pady=4)
+        self._ph_cv.bind('<Button-1>', self._ph_click)
+        self._ph_cv.bind('<Configure>', lambda e: self._ph_draw())
+        # 오른쪽: 재질·견본책, 결과, 여러 장 목록, 촬영 안내
+        r1 = ttk.Frame(right); r1.pack(fill=tk.X)
+        mv = tk.StringVar(value=f"재질: {getattr(self, '_mat_name', '') or '고르지 않음'}")
+        self._mat_vars = getattr(self, '_mat_vars', []) + [mv]
+        ttk.Button(r1, textvariable=mv, command=lambda: self._mat_window()).pack(side=tk.LEFT)
+        self._ph_deck = tk.StringVar(value=self.DECK_AUTO)
+        cb = ttk.Combobox(r1, textvariable=self._ph_deck, values=self._deck_values(), state='readonly', width=30)
+        cb.pack(side=tk.LEFT, padx=4)
+        cb.bind('<<ComboboxSelected>>', lambda e: self._ph_redo())
+        self._ph_res = tk.Text(right, height=16, width=52, font=('맑은 고딕', 10), relief=tk.FLAT, bg='#fbfcfe')
+        self._ph_res.pack(fill=tk.X, pady=4)
+        self._ph_res.tag_configure('h', font=('맑은 고딕', 10, 'bold'), foreground='#1e3a5f')
+        bb = ttk.Frame(right); bb.pack(fill=tk.X)
+        ttk.Button(bb, text="이 색을 이색 묶음에 넣기 (사진)", command=self._ph_add).pack(side=tk.LEFT)
+        ttk.Button(bb, text="여러 장 모두 넣기", command=self._ph_add_all).pack(side=tk.LEFT, padx=4)
+        self._ph_list = ttk.Treeview(right, columns=('f', 'lab', 'pt'), show='headings', height=5)
+        for c, t, w in (('f', '사진', 120), ('lab', 'L a b (바로잡음)', 140), ('pt', '1순위', 140)):
+            self._ph_list.heading(c, text=t); self._ph_list.column(c, width=w)
+        self._ph_list.pack(fill=tk.X, pady=4)
+        self._ph_list.bind('<<TreeviewSelect>>', lambda e: self._ph_list_pick())
+        g = ttk.LabelFrame(right, text="사진 보내 주실 분께 드릴 촬영 안내", padding=4); g.pack(fill=tk.BOTH, expand=True)
+        gm = tk.StringVar(value='auto')
+        gt = tk.Text(g, height=9, width=52, font=('맑은 고딕', 9), wrap='word')
+
+        def gshow():
+            gt.delete('1.0', tk.END); gt.insert('1.0', self.GUIDE_AUTO if gm.get() == 'auto' else self.GUIDE_PRO)
+        gr = ttk.Frame(g); gr.pack(fill=tk.X)
+        ttk.Radiobutton(gr, text="자동 모드", value='auto', variable=gm, command=gshow).pack(side=tk.LEFT)
+        ttk.Radiobutton(gr, text="프로 모드", value='pro', variable=gm, command=gshow).pack(side=tk.LEFT, padx=6)
+
+        def gcopy():
+            self.clipboard_clear(); self.clipboard_append(gt.get('1.0', tk.END).strip())
+            self._set_status("촬영 안내를 복사했습니다. 카카오톡·문자에 붙여 넣으십시오")
+        ttk.Button(gr, text="안내 복사", command=gcopy).pack(side=tk.RIGHT)
+        gt.pack(fill=tk.BOTH, expand=True)
+        gshow()
+        self._ph_text("① A4 흰 종이 사진 → ② 본판 사진을 여십시오.\n사진은 기계보다 오차가 큽니다(보통 ΔE 3~6).")
+
+    def _ph_text(self, t, rows=None):
+        w = self._ph_res
+        w.config(state=tk.NORMAL); w.delete('1.0', tk.END); w.insert('1.0', t)
+        for h in rows or []:
+            w.insert(tk.END, h[0], h[1] if len(h) > 1 else ())
+        w.config(state=tk.DISABLED)
+
+    def _ph_load(self, path, maxs=1400):
+        from PIL import Image, ImageOps
+        im = Image.open(path)
+        try:
+            im = ImageOps.exif_transpose(im)
+        except Exception:
+            pass
+        im = im.convert('RGB')
+        k = min(1.0, maxs / max(im.size))
+        if k < 1:
+            im = im.resize((max(1, int(im.size[0] * k)), max(1, int(im.size[1] * k))))
+        return im
+
+    def _ph_open_white(self):
+        p = filedialog.askopenfilename(title="A4 흰 종이 사진", filetypes=[("사진", "*.jpg *.jpeg *.png *.heic *.webp *.bmp"), ("모든 파일", "*.*")])
+        if not p:
+            return
+        try:
+            im = self._ph_load(p, 900)
+        except Exception as e:
+            messagebox.showerror("사진", f"열지 못했습니다: {e}")
+            return
+        W, H = im.size
+        lin, clip = self._area_lin(im, W / 2, H / 2, min(W, H) / 4)
+        self._ph['white'] = lin
+        self._ph_wst.set(self._ph_white_say(lin, clip))
+        self._ph_redo()
+
+    def _ph_white_say(self, lin, clip):
+        L, a, b = self._lin2lab(*lin)
+        Y = lin[0] * 0.2126 + lin[1] * 0.7152 + lin[2] * 0.0722
+        if clip > 0.25:
+            return "흰 종이가 하얗게 날아갔습니다(너무 밝음). 다시 찍는 것이 좋습니다. 지금 사진으로도 찾지만 오차가 큽니다."
+        if Y < 0.12:
+            return "흰 종이가 너무 어둡게 찍혔습니다. 더 밝은 곳에서 찍으십시오."
+        cast = (" 노란빛(따뜻한 불빛)이 돌아 바로잡습니다." if b > 6 else " 푸른빛이 돌아 바로잡습니다." if b < -6
+                else " 붉은빛이 돌아 바로잡습니다." if a > 5 else " 초록빛이 돌아 바로잡습니다." if a < -5 else "")
+        return f"흰 종이 읽음 ✔ 밝기 {L:.0f}%.{cast}"
+
+    def _ph_open(self):
+        ps = filedialog.askopenfilenames(title="본판 사진 (여러 장 고를 수 있음)", filetypes=[("사진", "*.jpg *.jpeg *.png *.webp *.bmp"), ("모든 파일", "*.*")])
+        if not ps:
+            return
+        self._ph['files'] = list(ps)
+        self._ph_show(ps[0])
+        self._ph_multi()
+
+    def _ph_show(self, path):
+        try:
+            self._ph['im'] = self._ph_load(path)
+        except Exception as e:
+            messagebox.showerror("사진", f"열지 못했습니다: {e}")
+            return
+        self._ph['name'] = os.path.basename(path)
+        self._ph['white1'] = None
+        im = self._ph['im']
+        if self._ph['mode'].get() == '1':
+            self._ph['tap'] = 'w'; self._ph['last'] = None
+            self._ph_draw()
+            self._ph_text("먼저 사진 속 흰 종이를 누르십시오. 그다음 잴 곳을 누르십시오.")
+            return
+        self._ph['last'] = (im.size[0] / 2, im.size[1] / 2, max(4, min(im.size) / 12))
+        self._ph_draw()
+        self._ph_redo()
+
+    def _ph_draw(self):
+        c = self._ph_cv
+        c.delete('all')
+        im = self._ph.get('im')
+        if im is None:
+            return
+        from PIL import ImageTk
+        W, H = max(50, c.winfo_width()), max(50, c.winfo_height())
+        k = min(W / im.size[0], H / im.size[1])
+        self._ph['k'] = k
+        self._ph['tk'] = ImageTk.PhotoImage(im.resize((max(1, int(im.size[0] * k)), max(1, int(im.size[1] * k)))))
+        c.create_image(0, 0, anchor='nw', image=self._ph['tk'])
+        if self._ph.get('last'):
+            x, y, s = self._ph['last']
+            c.create_oval(x * k - 12, y * k - 12, x * k + 12, y * k + 12, outline='white', width=3)
+            c.create_oval(x * k - 14, y * k - 14, x * k + 14, y * k + 14, outline='black', width=1)
+
+    def _ph_click(self, e):
+        im = self._ph.get('im')
+        if im is None:
+            return
+        k = self._ph.get('k', 1)
+        x, y = e.x / k, e.y / k
+        if self._ph['mode'].get() == '1' and self._ph['tap'] == 'w':
+            lin, clip = self._area_lin(im, x, y, max(4, im.size[0] / 40))
+            self._ph['white1'] = lin; self._ph['tap'] = 's'
+            self._ph_wst.set(self._ph_white_say(lin, clip) + " 이제 잴 곳을 누르십시오.")
+            self._ph_redo()
+            return
+        self._ph['last'] = (x, y, max(3, im.size[0] / 60))
+        self._ph_draw()
+        self._ph_redo()
+
+    def _ph_lab(self):
+        im, last = self._ph.get('im'), self._ph.get('last')
+        if im is None or not last:
+            return None, None
+        lin, _ = self._area_lin(im, *last)
+        white = self._ph['white'] if self._ph['mode'].get() == '2' else self._ph['white1']
+        return self._ph_correct(lin, white), self._lin2lab(*lin) if white else None
+
+    def _ph_redo(self):
+        if not hasattr(self, '_ph_res'):
+            return
+        lab, raw = self._ph_lab()
+        if lab is None:
+            return
+        L, a, b = lab
+        self._ph['lab'] = lab
+        rows = [(f"{'흰 종이로 바로잡은 색' if raw else '바로잡지 않은 색 (흰 종이 없음)'}\nL {L:.1f}  a {a:.1f}  b {b:.1f}"
+                 + (f"   (바로잡기 전 L {raw[0]:.0f} a {raw[1]:.0f} b {raw[2]:.0f})" if raw else '') + "\n", 'h')]
+        mat = self._mat_get()
+        if mat:
+            rows.append((f"재질: {mat['n']}\n",))
+        for j, key in enumerate(self._deck_keys(self._ph_deck.get())[:3]):
+            hit = self._rank_for(L, a, b, key, 5)
+            if not hit:
+                continue
+            rows.append((f"\n{j + 1}번째 견본책: {self._deck_label(key)}\n", 'h'))
+            for i, (dE, nm, dk, _) in enumerate(hit):
+                rows.append((f"  {i + 1}순위  {nm}  ΔE {dE:.2f}" + ('' if key else f"  · {dk}") + "\n",))
+        it = self._cm_item() if hasattr(self, 'cm_tree') else None
+        if it and it.get('master'):
+            dE = de2000(*it['master'], L, a, b)
+            rows.append((f"\n이색 묶음 '{it['name']}' 원본과 ΔE {dE:.2f} → {self._cm_verdict(dE, it)}\n", 'h'))
+        rows.append(("\n사진은 기계보다 오차가 큽니다(보통 ΔE 3~6). 고른 칩을 실제 견본책에서 꺼내 대 보십시오.",))
+        self._ph_text('', rows)
+
+    def _ph_multi(self):
+        t = self._ph_list
+        t.delete(*t.get_children())
+        self._ph['multi'] = []
+        fs = self._ph['files']
+        if len(fs) < 2 or self._ph['mode'].get() != '2':
+            return
+        for i, p in enumerate(fs):
+            self._set_status(f"지금 하는 일: 사진 {len(fs)}장 읽기 · {i + 1}번째 ({round((i + 1) / len(fs) * 100)}%)")
+            self.update_idletasks()
+            try:
+                im = self._ph_load(p, 700)
+            except Exception:
+                continue
+            lin, _ = self._area_lin(im, im.size[0] / 2, im.size[1] / 2, max(4, min(im.size) / 12))
+            lab = self._ph_correct(lin, self._ph['white'])
+            hit = self._rank_for(*lab, self._deck_keys(self._ph_deck.get())[0], 1)
+            self._ph['multi'].append((os.path.basename(p), lab))
+            t.insert('', 'end', iid=str(i), values=(os.path.basename(p), f"{lab[0]:.1f} {lab[1]:.1f} {lab[2]:.1f}",
+                                                    hit[0][1] if hit else ''))
+        self._set_status(f"사진 {len(fs)}장을 읽었습니다 (100%)")
+
+    def _ph_list_pick(self):
+        s = self._ph_list.selection()
+        if s:
+            self._ph_show(self._ph['files'][int(s[0])])
+
+    def _ph_add(self):
+        lab = self._ph.get('lab')
+        if not lab:
+            messagebox.showinfo("사진", "먼저 본판 사진을 여십시오.")
+            return
+        self.cm_add_sample(lab, f"사진 {self._ph.get('name', '')}", '사진')
+
+    def _ph_add_all(self):
+        ms = self._ph.get('multi') or []
+        if not ms:
+            messagebox.showinfo("사진", "② 본판 사진을 여러 장 열면 모두 넣을 수 있습니다.")
+            return
+        for nm, lab in ms:
+            self.cm_add_sample(lab, f"사진 {nm}", '사진')
+
+    def _tab_go(self, text):
+        for tid in self._notebook.tabs():
+            if self._notebook.tab(tid, 'text').startswith(text):
+                self._notebook.select(tid)
+                try:
+                    self._paint_tabs()
+                except Exception:
+                    pass
+                return
+
     def _goto_pantone(self, side):
         if not self.state_data[side]['measurements']:
             messagebox.showinfo("팬톤에서 찾기",
@@ -6673,11 +7348,7 @@ class AdvisorApp(tk.Tk):
             self.pt_deck_var.set('모든 팬덱')
         except Exception:
             pass
-        self._notebook.select(2)
-        try:
-            self._paint_tabs()
-        except Exception:
-            pass
+        self._tab_go('팬톤 색 보기')
         self._pt_nearest(side)
 
     def _on_calculate(self):

@@ -1,13 +1,14 @@
 {
- "ver": "0.57",
+ "ver": "0.63",
  "files": {
   "make_shortcut.py": "f8bfe70f0ebaedc0a7c784fafc580a42ec0d826f45f339a5b589e4b0a3439223",
+  "materials.json": "9c74d1bc0a57426ebc7a72194da2b6410871ba052d038e187a596fe41771b86f",
   "pantone_fandecks.json": "4e7059ebef090795cfd2b323d264d95d1dc20501604776493657ee27bb2d5e0a",
-  "rm200_color.py": "99de1b499b096dc783300953069fcb8efe4ff8dc5fa0529c15e669df03b4e678",
+  "rm200_color.py": "edf7e47249aee3bc6d43ba9976502120b5d78bf9597006d9074c94dfce8bdb1e",
   "rm200_safe.py": "933a48f4ae7d2f243f80046fcf59f89f021338b50bdc0f7e420f30ea9475d429",
-  "rm200_sync.py": "4b8559dbbd2a23e4522a5faada604baccf85ed4f0fabea8e3e55bf45d86a33de",
+  "rm200_sync.py": "4754f6cf96f53b0b015ea72609fabaeacd647833423d2103e18115c2d96a5f47",
   "rm200_update.py": "9ec7509cf9f35cd0cf92c2ab4255fe4707358e2474caa87836dc925306253cea",
-  "rm200color.ico": "c340940dd203b48e21982d4cb167315da5283aaffc77b3a913bd094bf5a1b33f",
+  "rm200color.ico": "cb5391b3fdb106f55ba4af7aaeef2ff93fb8fa5d2f7f203fb7620ce23e096679",
   "rm200lib.py": "6a2d1bfd323783848b7f76925fee743b5ec4f8ff9bab3eb6056a609aec1ca72c",
   "run.py": "f0ecaac8a3d3a4de8f4fde77a947475a609bd33076c94f522d966ba68c842ad1",
   "xrite_sync.py": "8c26c218704ef012744c4aebdacfa62f4d0f02e35125aeac7a8b08c28a5461c2"

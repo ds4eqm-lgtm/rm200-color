@@ -70,6 +70,20 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
 .pgrid .t i{display:block;height:46px}
 .pgrid .t span{display:block;font-size:10.5px;padding:3px 4px;line-height:1.25;word-break:break-all}
 .pdet{position:fixed;left:0;right:0;bottom:0;background:#fff;border-radius:16px 16px 0 0;box-shadow:0 -4px 20px rgba(0,0,0,.2);padding:16px;z-index:14;max-height:80vh;overflow:auto}
+.mchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.mchips button{padding:8px 11px;font-size:14px;font-weight:700;background:#e8eef8;color:var(--navy);border-radius:18px}
+.mchips button.on{background:var(--blue);color:#fff}
+#matsel{margin-top:10px;padding:10px 12px;border-radius:10px;background:#eef6ee;border:1px solid #b9dcb9;font-size:15px;line-height:1.6;display:none}
+.mic{flex:none;width:52px;font-size:22px;background:#e8eef8;color:var(--navy)}
+.seg{display:flex;gap:6px;margin:6px 0 10px}.seg button{flex:1;padding:10px 6px;font-size:14px;font-weight:700;background:#e8eef8;color:var(--navy)}.seg button.on{background:var(--navy);color:#fff}
+.rkh{font-size:13px;color:var(--sub);margin-top:12px}
+.rk.sm i{height:44px}.rk.sm span{font-size:12px}
+.rk{gap:5px}.rk span{font-size:13px!important}.rk small{font-size:11px!important}
+.fsel{width:100%;font:inherit;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.no{display:inline-block;min-width:30px;text-align:center;font-weight:800;color:#1e3a6e}
+.vb{display:inline-block;padding:2px 8px;border-radius:9px;color:#fff;font-weight:700;font-size:13px}
+.cmp{display:flex;height:110px;border-radius:12px;overflow:hidden;border:1px solid var(--line)}.cmp i{flex:1}
+#pmark2{position:absolute;width:30px;height:30px;border:3px dashed #fff;border-radius:6px;box-shadow:0 0 0 2px #1e6fd9;transform:translate(-50%,-50%);display:none;pointer-events:none}
 #pmark{position:absolute;width:26px;height:26px;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #000;transform:translate(-50%,-50%);display:none;pointer-events:none}
 #go.flash{animation:fl .35s 3}
 @keyframes fl{50%{background:#43a047}}
@@ -90,15 +104,44 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
   <div id="newv"><button id="newvb">새 판 확인</button> <button id="quit" style="background:#c62828;color:#fff;font-weight:700">마치기</button></div>
 </header>
 <nav>
-  <button data-t="meas" class="on">측정</button>
+  <button data-t="cm" class="on">이색 관리</button>
+  <button data-t="meas">컬러 찾기</button>
+  <button data-t="photo">사진으로 찾기</button>
+  <button data-t="find">팬톤 색</button>
   <button data-t="log">함께 본 기록</button>
   <button data-t="pal">내 팔레트</button>
-  <button data-t="find">팬톤 색</button>
   <button data-t="dev">기계</button>
 </nav>
 <main>
-<!-- 측정 -->
-<section id="t-meas">
+<!-- Ver 0.58: 이색 관리 (이 앱의 주된 일) -->
+<section id="t-cm">
+  <div class="card"><h4 style="margin:0 0 8px">이색 관리 — 납품 시료가 원본과 얼마나 다른지</h4>
+    <div class="dim" style="margin-bottom:4px">비교 묶음 (예: LVS-1814 11월 납품)</div>
+    <select id="cmsel" class="fsel"></select>
+    <div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap">
+      <span>합격 ΔE ≤</span><select id="cmokS" class="fsel" style="width:auto;padding:8px"></select>
+      <span>불합격 ΔE ≥</span><select id="cmbadS" class="fsel" style="width:auto;padding:8px"></select>
+    </div>
+    <div class="note" style="margin-top:4px">그 사이는 "주의"입니다. 고치면 모든 시료 판정이 바로 다시 매겨지고, PC와 다른 모바일 폰에도 같이 바뀝니다.</div>
+  </div>
+  <div class="card" id="cmmaster"></div>
+  <div class="card"><h4 style="margin:0 0 6px">시료 <span class="pill" id="cmcnt"></span></h4>
+    <div id="cmsum" class="msg" style="margin-top:0"></div>
+    <div id="cmchart"></div>
+    <div id="cmrows"></div>
+    <div class="note" style="margin-top:6px">시료를 누르면 [이 시료를 원본으로], 이름 바꾸기, 지우기를 할 수 있습니다. 원본을 잃어버렸으면 다른 번호를 원본으로 바꾸십시오.</div>
+    <div style="display:flex;gap:8px"><button class="sub" id="cmcopy">표 복사 (엑셀·카톡에 붙여 넣기)</button><button class="sub" id="cmreload">새로 읽기</button></div>
+  </div>
+  <div class="card note"><b>시료 넣는 방법</b><br>
+  1. 기계로: 아래 [기계 연결] 뒤 RM200 단추로 시료를 1번부터 차례로 잽니다. 다 재면 [다시 켜고 읽기]를 누르고, 목록에서 고른 뒤 [고른 색 이색 묶음에 넣기]를 누릅니다. (앱은 잴 때 정확한 색 값을 바로 받지 못해, 기계 기록에서 한꺼번에 받습니다.)<br>
+  2. PC로: PC 프로그램 [이색 관리]에서 재면 여기에도 바로 나옵니다.<br>
+  3. 사진으로: [사진으로 찾기] 칸에서 흰 A4와 시료를 찍어 넣습니다(오차가 커서 참고용).</div>
+  <div id="devslot-cm"></div>
+</section>
+<!-- 컬러 찾기 -->
+<section id="t-meas" class="hidden">
+  <div id="devslot-meas"></div>
+  <div id="devcards">
   <div class="card" id="nousb" style="display:none">
     <b>이 기기·브라우저에서는 기계를 직접 연결할 수 없습니다.</b>
     <p class="note" style="margin:6px 0 0">기계 연결은 안드로이드 크롬, 맥·윈도우의 크롬·엣지·웨일에서 됩니다. 아이폰·아이패드, 사파리, 파이어폭스, 삼성 인터넷은 막혀 있습니다. 대신 다른 기기에서 잰 색이 [함께 본 기록]에 바로 나오고, 내 팔레트와 팬톤 찾기는 모두 됩니다.</p>
@@ -118,6 +161,7 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
     <div id="blist"></div>
     <div id="bput" class="hidden">
       <input type="text" id="bpal">
+      <button class="big" id="bcmadd" style="margin-top:10px;background:#2e7d32">고른 색 이색 묶음에 넣기</button>
       <button class="big" id="bgo" style="margin-top:10px">고른 색 내 팔레트에 넣기</button>
       <p class="note" style="margin:6px 0 0">공용 저장소의 내 팔레트에 넣고 [함께 본 기록]에도 올립니다. PC 프로그램과 다른 모바일 폰에서 바로 보입니다.</p>
     </div>
@@ -127,11 +171,15 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
     <p>덮개를 닫아 흰 교정판 위에 두고 기계 위쪽 빨간 단추를 한 번 누르십시오. 끝나면 이 칸이 저절로 사라집니다.</p>
     <p class="note" style="margin:6px 0 0">0점은 색을 잴 때만 필요합니다. 출장에서 잰 색 불러오기(기계 기록 읽기)에는 필요 없습니다.</p>
   </div>
-  <div class="card" id="cmcard"><h4 style="margin:0 0 6px">이색 비교 (납품 타일 색 차이)</h4>
-    <div id="cmref" class="row" style="border-top:0"><span class="c" style="background:#eee"></span><div>기준 타일: 아직 없음</div></div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0">합격 ΔE ≤ <input type="number" id="cmok" step="0.1" min="0.1" value="1.5" style="width:70px;font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px"> 주의 ≤ <input type="number" id="cmwarn" step="0.1" min="0.1" value="3" style="width:70px;font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px"> <span class="dim">넘으면 불합격</span></div>
-    <p class="note" style="margin:0">① 기준 타일(승인 견본)과 새로 들어온 타일을 기계 빨간 단추로 잽니다. 한 장에 서너 군데 재면 좋습니다.<br>② 아래 [다시 켜고 읽기]를 누릅니다(기계가 실제 잰 값을 꺼냄).<br>③ 목록에서 기준 타일 색 이름을 누르고 [기준 타일로 정하기]. 그 뒤 목록 오른쪽에 기준과의 ΔE와 합격·주의·불합격이 나옵니다.<br>④ 새 타일을 누르고 [이색 기록에 남기기]. 기록은 PC·다른 모바일 폰과 함께 봅니다.</p>
-    <details style="margin-top:8px"><summary class="dim">이색 기록 <span id="cmn"></span></summary><div id="cmlog"></div></details></div>
+  </div>
+  <div id="matslot-meas"></div>
+  <div class="card" id="matcard"><h4 style="margin:0 0 6px">무엇을 재나요? (재질)</h4>
+    <div class="note" style="margin:0 0 8px">재는 물건의 재질을 고르면 그 재질에 맞는 팬톤 견본책부터 찾아 드립니다. 글로 쓰거나 🎤를 눌러 말해도 됩니다.</div>
+    <div style="display:flex;gap:8px"><input type="search" id="matq" placeholder="예: 데코타일, 실크 벽지, 면, 아트지"><button class="mic" id="matmic" title="말로 고르기">🎤</button></div>
+    <div class="mchips" id="mathit"></div>
+    <div id="matsel"></div>
+    <details style="margin-top:10px" id="matall"><summary class="dim">종류별로 모두 보기 (<span id="matn">0</span>가지)</summary><div id="matgrp"></div></details>
+  </div>
   <div class="card" id="dkcard"><h4 style="margin:0 0 6px">찾을 팬톤 견본책</h4>
     <select id="mdeck" style="width:100%;font:inherit;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:10px"><option value="">기계가 고른 견본책 그대로</option></select>
     <p class="note" style="margin:6px 0 0">재면 이 견본책에서 가장 가까운 팬톤색 1·2·3순위와, 내 팔레트에서 가까운 것을 바로 보여 줍니다.</p></div>
@@ -140,7 +188,7 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
     <div class="code" id="code"></div>
     <div class="dim" id="deck"></div>
     <div class="dim" id="lab"></div>
-    <div class="rk" id="rank"></div>
+    <div id="rank"></div>
     <div id="more" style="margin-top:10px"></div>
     <div id="own" style="margin-top:12px"></div>
   </div>
@@ -152,7 +200,7 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
 </section>
 <!-- 기계 -->
 <section id="t-dev" class="hidden">
-  <div class="card" id="devoff"><b>기계를 USB로 연결하면 여기서 기계 정보와 팬덱(색 견본책)을 봅니다.</b><p class="note" style="margin:6px 0 0">[측정] 칸에서 [기계 연결]을 먼저 누르십시오. 아이폰·사파리·삼성 인터넷은 기계 연결이 안 됩니다.</p></div>
+  <div class="card" id="devoff"><b>기계를 USB로 연결하면 여기서 기계 정보와 팬덱(색 견본책)을 봅니다.</b><p class="note" style="margin:6px 0 0">[이색 관리]나 [컬러 찾기] 칸에서 [기계 연결]을 먼저 누르십시오. 아이폰·사파리·삼성 인터넷은 기계 연결이 안 됩니다.</p></div>
   <div class="card"><h4>기계 정보</h4>
     <button class="sub" id="dinfo" style="margin:0">기계 정보 읽기</button>
     <div id="dinfo_o" class="kv" style="margin-top:10px"></div></div>
@@ -173,15 +221,41 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
   <p class="note">색을 누르면 팬톤색 1·2·3순위(가장 가까운 팬톤색)를 보여 줍니다. PC 프로그램의 내 팔레트와 같은 자료입니다(공용 저장소). 고치는 것은 PC 프로그램에서 합니다.</p></div>
 </section>
 <!-- 팬톤 찾기 -->
+<section id="t-photo" class="hidden">
+  <div id="matslot-photo"></div>
+  <div class="card" id="guide"><h4 style="margin:0 0 6px">사진 보내 주실 분께 드릴 촬영 안내</h4>
+    <div class="seg" style="margin-top:0"><button id="gauto" class="on">자동 모드로</button><button id="gpro">프로 모드로</button></div>
+    <pre id="gtext" style="white-space:pre-wrap;font:inherit;font-size:14px;line-height:1.6;background:#f7f9fc;border:1px solid var(--line);border-radius:10px;padding:10px;margin:0"></pre>
+    <div style="display:flex;gap:8px"><button class="sub" id="gcopy">안내 복사</button><button class="sub" id="gsend">카카오톡 등으로 보내기</button></div>
+  </div>
+  <div class="card" id="phcard"><h4>모바일 폰 사진으로 팬톤 찾기</h4>
+  <div class="seg"><button id="pm2" class="on">사진 두 장 (A4 먼저)</button><button id="pm1">한 장에 같이</button></div>
+  <div id="ph2">
+    <p class="note" style="margin:0 0 8px">① 흰 A4 복사지를 찍고, ② 같은 자리·같은 높이·같은 불빛에서 본판(잴 물건)을 찍어 두 장을 차례로 고르십시오. A4 흰색으로 그 카메라와 불빛의 색을 바로잡은 뒤 팬톤 1~4순위를 찾습니다.</p>
+    <label class="sub" style="display:block;text-align:center;cursor:pointer;margin:0">① A4 흰 종이 사진 고르기<input type="file" id="pfw" accept="image/*" style="display:none"></label>
+    <div class="msg" id="pwst" style="margin-top:6px">아직 흰 종이 사진이 없습니다.</div>
+  </div>
+  <div id="ph1" class="hidden">
+    <p class="note" style="margin:0 0 8px">흰 A4 종이 위에 본판을 반쯤 걸쳐 올려 한 장에 같이 찍으십시오. 사진을 고른 뒤 사진 속 흰 종이를 한 번, 잴 곳을 한 번 누르면 됩니다. 두 장보다 이 방법이 더 정확합니다(카메라가 사진마다 밝기를 바꾸기 때문).</p>
+    <div class="seg" style="margin-top:0"><button id="ptw">흰 종이 누르기</button><button id="pts" class="on">잴 곳 누르기</button></div>
+  </div>
+  <label class="sub" style="display:block;text-align:center;cursor:pointer;margin:6px 0 0" id="pflab">② 본판 사진 고르기<input type="file" id="pfile" accept="image/*" multiple style="display:none"></label>
+  <div style="margin-top:10px"><span class="dim">찾을 견본책</span><select id="phdeck" style="width:100%;font:inherit;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:10px;margin-top:4px"></select></div>
+  <div id="pwrap" class="hidden" style="position:relative;margin-top:10px"><canvas id="pcv" style="width:100%;border-radius:10px;touch-action:manipulation"></canvas><div id="pmark"></div><div id="pmark2"></div></div>
+  <div id="ppick" style="margin-top:8px"></div>
+  <div id="pmulti" style="margin-top:8px"></div>
+  <details style="margin-top:10px"><summary class="dim">사진을 정확하게 찍는 법</summary><div class="note">
+  1. 해가 들지 않는 창가 낮 빛이나 밝은 흰 형광등 아래에서, 플래시는 끄고 찍습니다.<br>
+  2. 모바일 폰을 물건과 나란하게(위에서 똑바로) 들고, 그림자와 반사가 없게 합니다.<br>
+  3. 두 장으로 찍을 때는 A4와 본판을 같은 자리에 놓고 같은 높이에서 찍습니다. 카메라 화면을 길게 눌러 노출·초점 고정(AE/AF 잠금)을 하면 더 정확합니다.<br>
+  4. 흰 종이가 하얗게 날아가면(너무 밝으면) 보정이 안 됩니다. 화면의 밝기 해 모양을 조금 내려 찍으십시오.<br>
+  5. 사진은 기계보다 오차가 큽니다(보통 ΔE 3~6). 고른 1~4순위 칩을 실제 견본책에서 꺼내 물건 옆에 대 보고 마지막에 눈으로 고르십시오. 정확한 값이 필요하면 RM200으로 재십시오.</div></details>
+  </div>
+</section>
 <section id="t-find" class="hidden">
-  <div class="card"><h4>팬톤 번호로 찾기</h4>
+  <div id="findnum" class="card"><h4>팬톤 번호로 찾기</h4>
   <input type="search" id="pq" placeholder="예: 17-3938, 179 C, 2925">
   <div id="pres" style="margin-top:8px"></div></div>
-  <div class="card"><h4>사진에서 색 고르기</h4>
-  <p class="note" style="margin:0 0 8px">모바일 폰으로 찍은 사진을 고르면 사진 가운데 색과 비슷한 팬톤색을 바로 골라 드립니다. 다른 곳을 알고 싶으면 사진 위 그 곳을 누르십시오. 사진은 빛과 카메라에 따라 색이 달라지므로 대강 찾는 데 쓰시고, 정확한 색은 기계로 재십시오.</p>
-  <label class="sub" style="display:block;text-align:center;cursor:pointer;margin:0">사진 고르기<input type="file" id="pfile" accept="image/*" style="display:none"></label>
-  <div id="pwrap" class="hidden" style="position:relative;margin-top:10px"><canvas id="pcv" style="width:100%;border-radius:10px;touch-action:manipulation"></canvas><div id="pmark"></div></div>
-  <div id="ppick" style="margin-top:8px"></div></div>
   <div class="card"><h4>팬톤색 보기 (견본책)</h4>
   <select id="pdeck" style="width:100%;font:inherit;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:10px"></select>
   <div id="pgrid" class="pgrid"></div></div>
@@ -255,13 +329,13 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
 })();
 
 'use strict';
-const VER = '0.57';
+const VER = '0.63';
 const VID = 0x0765, PID = 0x6001;
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 $('ver').textContent = 'Ver ' + VER;
-function toast(t){ const e = $('toast'); e.textContent = t; e.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => e.style.display = 'none', 2600); }
+function toast(t){ const e = $('toast'); e.textContent = t; e.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => e.style.display = 'none', Math.max(6000, String(t).length / 7 * 1000)); }   // Ver 0.58: 읽을 시간만큼(1초 7글자, 최소 6초)
 const UA = navigator.userAgent;
 const IS_IOS = /iPhone|iPad|iPod/i.test(UA) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const IS_ANDROID = /Android/i.test(UA);
@@ -270,9 +344,13 @@ const KAKAO = /KAKAOTALK/i.test(UA);
 // ---------------------------------------------------------------- 탭
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
-  for (const t of ['meas','log','pal','find','dev']) $('t-' + t).classList.toggle('hidden', t !== b.dataset.t);
+  for (const t of ['cm','meas','photo','log','pal','find','dev']) $('t-' + t).classList.toggle('hidden', t !== b.dataset.t);
   if (b.dataset.t === 'log') loadLog();
   if (b.dataset.t === 'pal') loadPal();
+  // Ver 0.58: 재질 고르기 칸은 [측정]과 [팬톤 색] 칸에 같이 보임(하나를 옮겨 씀)
+  if (b.dataset.t === 'photo' || b.dataset.t === 'meas') $('matslot-' + b.dataset.t).appendChild($('matcard'));
+  if (b.dataset.t === 'cm' || b.dataset.t === 'meas') $('devslot-' + b.dataset.t).appendChild($('devcards'));
+  if (b.dataset.t === 'cm') cmLoad();
 });
 
 // ---------------------------------------------------------------- 색 계산
@@ -365,17 +443,156 @@ function deckDraw(more){
   $('pgrid').insertAdjacentHTML('beforeend', part.map(x => `<div class="t" data-n="${esc(x.name)}"><i style="background:${lab2rgb(...x.lab)}"></i><span>${esc(x.name)}</span></div>`).join(''));
 }
 $('pdeck').onchange = () => deckDraw(false);
-// Ver 0.50: 측정 칸 '찾을 팬톤 견본책'
-async function mdeckInit(){
-  await pantone();
-  const m = new Map(); for (const x of PTL) m.set(x.deck, (m.get(x.deck) || 0) + 1);
-  let cur = ''; try { cur = localStorage.getItem('rm200_mdeck') || ''; } catch(e){}
-  $('mdeck').innerHTML = '<option value="">기계가 고른 견본책 그대로</option>' + [...m].map(([k, n]) => `<option value="${esc(k)}">${esc(k)} (${n}색)</option>`).join('');
-  if (m.has(cur)) $('mdeck').value = cur;
+// Ver 0.50 → 0.58: '찾을 팬톤 견본책' — 재질에 맞춰 / 내가 가진 견본책 / 모든 견본책 / 한 권만
+function deckOpts(){
+  const m = new Map(); for (const x of PTL || []) m.set(x.deck, (m.get(x.deck) || 0) + 1);
+  const ownOf = k => (MATS && MATS.own || []).filter(o => o.k === k).map(o => o.ko).join(', ');
+  const pb = ownPalBooks();
+  return '<option value="">재질에 맞춰 찾기 (재질을 안 고르면 모든 견본책)</option><option value="@own">내가 가진 견본책 8권에서만</option><option value="@all">모든 견본책 (11권)</option>'
+    + '<optgroup label="한 권에서만">' + [...m].map(([k, n]) => `<option value="${esc(k)}">${esc(k)} (${n}색)${ownOf(k) ? ' ★ ' + esc(ownOf(k)) : ''}</option>`).join('')
+    + pb.map(k => `<option value="${esc(k)}">${esc(k.slice(4))} (직접 잰 칩)</option>`).join('') + '</optgroup>';
 }
+async function mdeckInit(){
+  await pantone(); await matLoad(); await palettes().catch(() => null);
+  for (const [id, key] of [['mdeck', 'rm200_mdeck'], ['phdeck', 'rm200_phdeck']]){
+    let cur = ''; try { cur = localStorage.getItem(key) || ''; } catch(e){}
+    $(id).innerHTML = deckOpts();
+    if ([...$(id).options].some(o => o.value === cur)) $(id).value = cur;
+  }
+}
+function deckSay(v){ return v === '@own' ? '내가 가진 견본책에서' : v === '@all' ? '모든 견본책에서' : v ? v.replace(/^pal:/, '') + '에서' : (MAT ? `재질(${MAT.n})에 맞는 견본책부터` : '모든 견본책에서'); }
 $('mdeck').onchange = () => { try { localStorage.setItem('rm200_mdeck', $('mdeck').value); } catch(e){}
-  if (typeof BR !== 'undefined' && BR && BR.length){ BR.forEach(r => { r.pt = ptNear(r.lab, 1, $('mdeck').value || deckOf(r.deck))[0] || r.pt; }); bdraw(); } toast($('mdeck').value ? `이제 ${$('mdeck').value}에서 찾습니다` : '기계가 고른 견본책에서 찾습니다'); };
-mdeckInit().catch(() => {});
+  matRefresh(); toast('이제 ' + deckSay($('mdeck').value) + ' 찾습니다'); };
+$('phdeck').onchange = () => { try { localStorage.setItem('rm200_phdeck', $('phdeck').value); } catch(e){}
+  if (PHLAST) pickAt(...PHLAST); toast('사진 색을 ' + deckSay($('phdeck').value) + ' 찾습니다'); };
+
+// ---------------------------------------------------------------- Ver 0.58: 무엇을 재나요? (재질 약 200가지 → 맞는 견본책 순서)
+let MATS = null, MAT = null, LASTSHOW = null;
+async function matLoad(){
+  if (MATS) return MATS;
+  try { MATS = await (await fetch('materials.json', {cache: 'no-cache'})).json(); } catch(e){ MATS = {groups: [], own: [], m: []}; }
+  return MATS;
+}
+const mnorm = t => String(t || '').toLowerCase().replace(/[\s()·,.\-_/~!?]/g, '');
+function matFind(q){
+  const Q = mnorm(q); if (!Q || !MATS) return [];
+  const out = [];
+  for (const m of MATS.m){
+    const n = mnorm(m.n), core = mnorm(m.n.replace(/\(.*?\)/g, ''));
+    let sc = 0;
+    if (n === Q || core === Q) sc = 100;
+    else if (core.length >= 2 && Q.includes(core)) sc = 70 + core.length;
+    else if (core.length === 1 && Q.startsWith(core)) sc = 55;
+    else if (n.includes(Q)) sc = 60 + Q.length;
+    for (const a of m.a.split(/\s+/)){
+      const A = mnorm(a); if (A.length < 2) continue;
+      if (A === Q) sc = Math.max(sc, 90);
+      else if (Q.includes(A)) sc = Math.max(sc, 50 + A.length);
+      else if (A.includes(Q) && Q.length >= 2) sc = Math.max(sc, 40 + Q.length);
+    }
+    if (sc) out.push([sc, m]);
+  }
+  return out.sort((a, b) => b[0] - a[0]).slice(0, 8).map(x => x[1]);
+}
+function matHits(L){
+  $('mathit').innerHTML = L.map(m => `<button data-n="${esc(m.n)}" class="${MAT && MAT.n === m.n ? 'on' : ''}">${esc(m.n)}</button>`).join('');
+}
+function matDrawAll(){
+  if (!MATS) return;
+  $('matn').textContent = MATS.m.length;
+  $('matgrp').innerHTML = MATS.groups.map(g => `<div class="rkh"><b>${esc(g)}</b></div><div class="mchips">` + MATS.m.filter(m => m.g === g).map(m => `<button data-n="${esc(m.n)}" class="${MAT && MAT.n === m.n ? 'on' : ''}">${esc(m.n)}</button>`).join('') + '</div>').join('');
+}
+function matSet(m, quiet){
+  MAT = m || null;
+  try { localStorage.setItem('rm200_mat', MAT ? MAT.n : ''); } catch(e){}
+  const e = $('matsel');
+  if (!MAT){ e.style.display = 'none'; }
+  else {
+    const ks = MAT.d.length ? MAT.d : ['모든 견본책'];
+    e.style.display = 'block';
+    e.innerHTML = `고른 재질: <b>${esc(MAT.n)}</b> <span class="dim">(${esc(MAT.g)})</span><br>찾는 순서: ` + ks.map((k, i) => `${i + 1} ${esc(k)}`).join(' → ')
+      + (MAT.t ? `<div class="note" style="margin-top:4px">${esc(MAT.t)}</div>` : '') + '<button class="sub" id="matx" style="margin-top:8px;padding:8px">재질 지우기</button>';
+    $('matx').onclick = () => { matSet(null); toast('재질을 지웠습니다. 모든 견본책에서 찾습니다'); };
+  }
+  document.querySelectorAll('#mathit button,#matgrp button').forEach(b => b.classList.toggle('on', !!MAT && b.dataset.n === MAT.n));
+  if (!quiet){ if (MAT) toast(`재질 "${MAT.n}" → ${MAT.d[0] || '모든 견본책'}부터 찾습니다`); matRefresh(); }
+}
+function matRefresh(){
+  if (LASTSHOW) show(LASTSHOW, true).catch(() => {});
+  if (PHLAST) pickAt(...PHLAST);
+  if (typeof BR !== 'undefined' && BR && BR.length){ BR.forEach(r => { r.pt = rankFor(r.lab, deckKeys($('mdeck').value, r.deck)[0], 1)[0] || r.pt; }); bdraw(); }
+}
+$('matq').oninput = () => matHits(matFind($('matq').value));
+$('matq').onkeydown = e => { if (e.key === 'Enter'){ const h = matFind($('matq').value); if (h.length) matSet(h[0]); else toast('목록에서 찾지 못했습니다. 아래 [종류별로 모두 보기]에서 골라 주십시오'); } };
+$('matcard').addEventListener('click', e => { const b = e.target.closest('#mathit button,#matgrp button'); if (!b) return; const m = MATS.m.find(x => x.n === b.dataset.n); if (m) matSet(m); });
+function matHeard(alts){
+  for (const t of alts){ const h = matFind(t); if (h.length){ $('matq').value = t; matHits(h); matSet(h[0]); return; } }
+  $('matq').value = alts[0] || ''; matHits([]); toast(`"${alts[0] || ''}" 은(는) 목록에 없습니다. 아래 [종류별로 모두 보기]에서 골라 주십시오`);
+}
+window.__rmspeech = t => { if (t) matHeard(String(t).split('\n')); else toast('말을 알아듣지 못했습니다. 다시 눌러 말씀하십시오'); };
+$('matmic').onclick = () => {
+  if (window.RMAPP && RMAPP.listen){ try { RMAPP.listen(); return; } catch(e){} }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SR){
+    try {
+      const r = new SR(); r.lang = 'ko-KR'; r.interimResults = false; r.maxAlternatives = 3;
+      r.onresult = ev => matHeard([...ev.results[0]].map(x => x.transcript));
+      r.onerror = ev => { toast('말을 듣지 못했습니다(' + ev.error + '). 자판의 마이크 단추로 말해도 됩니다'); $('matq').focus(); };
+      r.start(); toast('듣는 중입니다. 재질 이름을 말씀하십시오 (예: 데코타일)'); return;
+    } catch(e){}
+  }
+  $('matq').focus(); toast('글자판의 마이크(🎤) 단추를 눌러 말씀하셔도 됩니다');
+};
+// 견본책 열쇠: 팬톤 자료의 견본책 이름, null = 모든 견본책, 'pal:이름' = 내 팔레트에 직접 재서 넣은 견본책(파스텔·네온, 메탈릭)
+function ownPalBooks(){
+  const out = [];
+  for (const o of (MATS && MATS.own) || []) if (o.pal && PAL && Object.keys(PAL).some(p => (p === o.pal || p.startsWith(o.pal + '/')) && Object.keys(PAL[p] || {}).length)) out.push('pal:' + o.pal);
+  return out;
+}
+function deckKeys(sel, devDeck){
+  if (sel === '@all') return [null];
+  if (sel === '@own'){
+    const pref = k => { const i = MAT ? MAT.d.indexOf(k) : -1; return i < 0 ? 9 : i; };
+    const ks = [...new Set(((MATS && MATS.own) || []).filter(o => o.k).map(o => o.k))].sort((a, b) => pref(a) - pref(b));
+    return ks.concat(ownPalBooks());
+  }
+  if (sel) return [sel];
+  if (MAT && MAT.d.length) return MAT.d.slice();
+  return [null];   // Ver 0.58: 아무것도 안 고르면 모든 견본책에서 1~5순위(견본책 이름 함께)
+}
+function rankFor(lab, key, n){
+  if (key && key.startsWith('pal:')){
+    const nm = key.slice(4);
+    return palItems(PAL || {}).filter(y => y.pal === nm || y.pal.startsWith(nm + '/')).map(y => ({...y, de: de2000(...lab, ...y.lab)})).sort((a, b) => a.de - b.de).slice(0, n);
+  }
+  return ptNear(lab, n, key || undefined);
+}
+function deckLabel(k){
+  if (!k) return '모든 견본책';
+  if (k.startsWith('pal:')) return k.slice(4) + ' (직접 잰 칩)';
+  const own = ((MATS && MATS.own) || []).filter(o => o.k === k).map(o => o.ko);
+  return k + (own.length ? ' — 가진 책: ' + own.join(', ') : '');
+}
+async function rankHTML(lab, keys, n, sel){
+  await pantone(); await palettes().catch(() => null);
+  let h = '', j = 0; n = 5;   // Ver 0.58: 1~5순위
+  for (const k of keys){
+    if (j >= 3) break;
+    const L = rankFor(lab, k, n); if (!L.length) continue;
+    h += `<div class="rkh">${keys.length > 1 ? (j + 1) + '번째로 보는 견본책: ' : '견본책: '}<b>${esc(deckLabel(k))}</b></div><div class="rk${j ? ' sm' : ''}">`
+      + L.map((x, i) => `<div class="${!j && !i ? 'r1 ' : ''}tap" data-n="${x.pal ? '' : esc(x.name)}"><i style="background:${lab2rgb(...x.lab)}"></i><b>${i + 1}순위</b><span>${esc(x.name)}</span><small>ΔE ${x.de.toFixed(2)}${k ? '' : '<br>' + esc(x.deck)}</small></div>`).join('') + '</div>';
+    if (!k && sel) h += `<div class="rkh">이 견본책에서만 보기</div><div class="mchips">` + [...new Set(L.map(x => x.deck))].map(d => `<button data-dk="${esc(d)}" data-sel="${sel}">${esc(d)}</button>`).join('') + '</div>';
+    j++;
+  }
+  if (sel && $(sel) && $(sel).value) h += `<div class="mchips"><button data-dk="" data-sel="${sel}">모든 견본책에서 다시 보기</button></div>`;
+  return h || '<div class="dim">찾을 견본책에 색이 없습니다</div>';
+}
+function rankWire(box){
+  box.querySelectorAll('.tap[data-n]').forEach(e => { if (e.dataset.n) e.onclick = () => openInDeck(e.dataset.n); });
+  box.querySelectorAll('button[data-dk]').forEach(e => e.onclick = () => { const id = e.dataset.sel; $(id).value = e.dataset.dk; $(id).onchange(); });
+}
+(async () => { await matLoad(); let n = ''; try { n = localStorage.getItem('rm200_mat') || ''; } catch(e){}
+  const m = MATS.m.find(x => x.n === n); if (m) matSet(m, true); matDrawAll(); await mdeckInit(); })().catch(() => {});
 async function ptDetail(x){
   const items = palItems(await palettes());
   const own = items.map(y => ({...y, de: de2000(...x.lab, ...y.lab)})).sort((a, b) => a.de - b.de).slice(0, 5);
@@ -389,37 +606,154 @@ async function ptDetail(x){
 }
 $('pgrid').onclick = e => { const t = e.target.closest('.t'); if (!t) return; const x = PT.get(norm(t.dataset.n)); if (x) ptDetail(x); };
 document.querySelector('nav button[data-t=find]').addEventListener('click', () => deckInit().catch(() => {}));
-// 사진에서 색 고르기
+// 사진에서 색 고르기 — Ver 0.58: 흰 A4 종이로 카메라·불빛 색을 바로잡음 (두 장 또는 한 장에 같이)
+let PHMODE = 2, PHW2 = null, PHW1 = null, PHTAP = 's', PHLAST = null;
+const s2l = v => { v /= 255; return v > 0.04045 ? ((v + 0.055) / 1.055) ** 2.4 : v / 12.92; };
+function lin2lab(R, G, B){
+  let x = (R*0.4124 + G*0.3576 + B*0.1805) / 0.95047, y = R*0.2126 + G*0.7152 + B*0.0722, z = (R*0.0193 + G*0.1192 + B*0.9505) / 1.08883;
+  const h = t => t > 0.008856 ? Math.cbrt(t) : 7.787*t + 16/116;
+  x = h(x); y = h(y); z = h(z);
+  return [116*y - 16, 500*(x - y), 200*(y - z)].map(v => Math.round(v*100)/100);
+}
+function lab2lin(L, a, b){
+  const fy = (L + 16) / 116, fx = fy + a / 500, fz = fy - b / 200, iv = t => t**3 > 0.008856 ? t**3 : (t - 16/116) / 7.787;
+  const X = 0.95047 * iv(fx), Y = iv(fy), Z = 1.08883 * iv(fz);
+  return [3.2406*X - 1.5372*Y - 0.4986*Z, -0.9689*X + 1.8758*Y + 0.0415*Z, 0.0557*X - 0.2040*Y + 1.0570*Z];
+}
+const PAPER = [95, 0, -3];   // 흰 A4 복사지의 보통 색(L 95, 아주 조금 푸른 흰색)
+function areaLin(ctx, x, y, s, W, H){
+  const x0 = Math.max(0, Math.round(x - s)), y0 = Math.max(0, Math.round(y - s)), w = Math.min(W - x0, 2*s + 1), h = Math.min(H - y0, 2*s + 1);
+  const d = ctx.getImageData(x0, y0, w, h).data;
+  let R = 0, G = 0, B = 0, n = 0, clip = 0;
+  for (let i = 0; i < d.length; i += 4){ R += s2l(d[i]); G += s2l(d[i+1]); B += s2l(d[i+2]); n++; if (d[i] >= 250 || d[i+1] >= 250 || d[i+2] >= 250) clip++; }
+  return {lin: [R/n, G/n, B/n], clip: clip / n};
+}
+function whiteSay(w){
+  const Y = w.lin[0]*0.2126 + w.lin[1]*0.7152 + w.lin[2]*0.0722, lab = lin2lab(...w.lin);
+  const cast = lab[2] > 6 ? ' 노란빛(따뜻한 불빛)이 돌아 바로잡습니다.' : lab[2] < -6 ? ' 푸른빛이 돌아 바로잡습니다.' : lab[1] > 5 ? ' 붉은빛이 돌아 바로잡습니다.' : lab[1] < -5 ? ' 초록빛이 돌아 바로잡습니다.' : '';
+  if (w.clip > 0.25) return ['흰 종이가 하얗게 날아갔습니다(너무 밝음). 화면 밝기를 조금 내려 다시 찍으십시오. 지금 사진으로도 찾지만 오차가 큽니다.', true];
+  if (Y < 0.12) return ['흰 종이가 너무 어둡게 찍혔습니다. 더 밝은 곳에서 찍으십시오. 지금 사진으로도 찾지만 오차가 큽니다.', true];
+  return [`흰 종이 읽음 ✔ 밝기 ${Math.round(lab[0])}%.${cast}`, false];
+}
+function loadImg(f, cb){ const img = new Image(); img.onload = () => { cb(img); URL.revokeObjectURL(img.src); }; img.onerror = () => toast('사진을 열지 못했습니다'); img.src = URL.createObjectURL(f); }
+function phMode(m){
+  PHMODE = m; $('pm2').classList.toggle('on', m === 2); $('pm1').classList.toggle('on', m === 1);
+  $('ph2').classList.toggle('hidden', m !== 2); $('ph1').classList.toggle('hidden', m !== 1);
+  $('pflab').firstChild.textContent = m === 2 ? '② 본판 사진 고르기' : '사진 고르기 (흰 종이 + 본판)';
+  if (PHLAST) pickAt(...PHLAST);
+}
+const GUIDE = {
+auto: `[색 확인용 사진 찍는 법 - 자동 모드]
+1. 플래시는 끕니다. 해가 직접 들지 않는 창가 낮 빛이나 밝은 흰 형광등 아래에서 찍습니다.
+2. 흰 A4 복사지 한 장을 바닥에 놓고, 모바일 폰을 종이와 나란하게(위에서 똑바로) 30cm 높이에서 찍습니다. 종이가 화면을 가득 채우게 합니다.
+3. 같은 자리, 같은 높이, 같은 불빛에서 본품(시료)을 놓고 찍습니다. 본품이 여러 장이면 한 장씩 같은 방법으로 찍습니다.
+4. 그림자와 반짝이는 반사가 사진에 들어가지 않게 합니다.
+5. 더 정확하게 하려면 흰 종이 위에 본품을 반쯤 걸쳐 올려 한 장에 같이 찍어 주십시오.
+6. 사진은 줄이지 말고 원본 그대로 보내 주십시오(카카오톡은 "원본" 으로 보내기).`,
+pro: `[색 확인용 사진 찍는 법 - 프로 모드]
+삼성 모바일 폰: 카메라 → 더보기 → 프로 / 아이폰은 자동 모드 안내대로 찍어 주십시오.
+1. 플래시 끔. 해가 직접 들지 않는 창가 낮 빛이나 밝은 흰 형광등 아래.
+2. 화이트밸런스(WB): 5000K~5500K 로 고정 (자동 WB 쓰지 않기)
+3. ISO: 100 (어두우면 200까지)
+4. 셔터 속도: 흰 A4 종이를 찍었을 때 종이가 하얗게 날아가지 않는 값 (보통 실내 1/30~1/60초, 창가 1/125초). 화면의 노출 막대가 0 근처면 됩니다.
+5. 조리개: 모바일 폰이 정한 값 그대로 (바꿀 수 있는 기종이면 F2.4 정도)
+6. 초점: 자동. 모바일 폰은 종이와 나란하게, 30cm 높이.
+7. 위 설정 그대로 흰 A4 종이 한 장 → 같은 자리에서 본품을 한 장씩 찍습니다. 중간에 설정을 바꾸지 않습니다.
+8. 사진은 원본 그대로 보내 주십시오(카카오톡은 "원본" 으로 보내기).`};
+let GMODE = 'auto';
+function gDraw(){ $('gtext').textContent = GUIDE[GMODE]; $('gauto').classList.toggle('on', GMODE === 'auto'); $('gpro').classList.toggle('on', GMODE === 'pro'); }
+$('gauto').onclick = () => { GMODE = 'auto'; gDraw(); }; $('gpro').onclick = () => { GMODE = 'pro'; gDraw(); }; gDraw();
+$('gcopy').onclick = async () => { const t = GUIDE[GMODE]; try { navigator.clipboard.writeText(t).catch(() => {}); } catch(e){} if (window.RMAPP) RMAPP.copy(t); toast('촬영 안내를 복사했습니다. 카카오톡·문자에 붙여 넣으십시오'); };
+$('gsend').onclick = async () => { const t = GUIDE[GMODE]; try { navigator.clipboard.writeText(t).catch(() => {}); } catch(e){} if (window.RMAPP){ RMAPP.copy(t); return RMAPP.share('kakao', t); }
+  if (navigator.share){ try { await navigator.share({title: '색 확인용 사진 찍는 법', text: t}); return; } catch(e){} }
+  if (IS_ANDROID) location.href = 'intent://send#Intent;scheme=kakaolink;package=com.kakao.talk;end'; else toast('안내를 복사했습니다. 보낼 곳에 붙여 넣으십시오'); };
+$('pm2').onclick = () => phMode(2); $('pm1').onclick = () => phMode(1);
+function phTap(t){ PHTAP = t; $('ptw').classList.toggle('on', t === 'w'); $('pts').classList.toggle('on', t === 's'); }
+$('ptw').onclick = () => { phTap('w'); toast('사진 속 흰 종이를 누르십시오'); }; $('pts').onclick = () => phTap('s');
+$('pfw').onchange = () => {
+  const f = $('pfw').files[0]; if (!f) return;
+  loadImg(f, img => {
+    const c = document.createElement('canvas'), k = Math.min(1, 900 / Math.max(img.width, img.height));
+    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, c.width, c.height);
+    PHW2 = areaLin(ctx, c.width / 2, c.height / 2, Math.round(Math.min(c.width, c.height) / 4), c.width, c.height);   // 가운데 절반 넓이 평균
+    const [t, bad] = whiteSay(PHW2);
+    $('pwst').innerHTML = `<span class="c" style="display:inline-block;width:22px;height:22px;vertical-align:middle;border:1px solid var(--line);border-radius:5px;background:rgb(${PHW2.lin.map(v => Math.round(255 * (v > 0.0031308 ? 1.055 * v ** (1/2.4) - 0.055 : 12.92 * v))).join(',')})"></span> ` + esc(t) + (PHLAST ? '' : ' 이제 ② 본판 사진을 고르십시오.');
+    $('pwst').className = 'msg' + (bad ? ' err' : '');
+    if (PHLAST) pickAt(...PHLAST);
+  });
+};
 $('pfile').onchange = () => {
-  const f = $('pfile').files[0]; if (!f) return;
-  const img = new Image();
-  img.onload = () => {
+  const fs = [...$('pfile').files]; if (!fs.length) return;
+  PHFILES = fs; $('pmulti').innerHTML = '';
+  phShow(fs[0]);
+  if (fs.length > 1 && PHMODE === 2) phMulti(fs);
+};
+$('pcv').onclick = e => {
+  const c = $('pcv'), r = c.getBoundingClientRect(), x = (e.clientX - r.left) * c.width / r.width, y = (e.clientY - r.top) * c.height / r.height;
+  if (PHMODE === 1 && PHTAP === 'w'){
+    PHW1 = areaLin(c.getContext('2d'), x, y, Math.max(4, Math.round(c.width / 40)), c.width, c.height);
+    const m = $('pmark2'); m.style.left = (x * r.width / c.width) + 'px'; m.style.top = (y * r.height / c.height) + 'px'; m.style.display = 'block';
+    const [t] = whiteSay(PHW1); toast(t + ' 이제 잴 곳을 누르십시오.'); phTap('s');
+    if (PHLAST) pickAt(...PHLAST); return;
+  }
+  pickAt(x, y, Math.max(3, Math.round(c.width / 60)), false);
+};
+async function pickAt(x, y, s, auto){
+  PHLAST = [x, y, s, auto];
+  const c = $('pcv'), r = c.getBoundingClientRect(); x = Math.round(x); y = Math.round(y);
+  const smp = areaLin(c.getContext('2d'), x, y, s, c.width, c.height);
+  $('pmark').style.left = (x * r.width / c.width) + 'px'; $('pmark').style.top = (y * r.height / c.height) + 'px'; $('pmark').style.display = 'block';
+  await pantone(); await matLoad();
+  const W = PHMODE === 2 ? PHW2 : PHW1, raw = lin2lab(...smp.lin);
+  let lab = raw, how;
+  if (W){
+    const tgt = lab2lin(...PAPER), g = W.lin.map((v, i) => tgt[i] / Math.max(v, 1e-4));
+    lab = lin2lab(...smp.lin.map((v, i) => Math.min(1, v * g[i])));
+    how = `흰 종이로 바로잡은 색 (바로잡기 전 L ${raw[0].toFixed(0)} a ${raw[1].toFixed(0)} b ${raw[2].toFixed(0)})`;
+  } else how = PHMODE === 2 ? '흰 종이 사진이 없어 바로잡지 않은 색입니다. ① A4 흰 종이 사진을 고르면 더 정확합니다.' : '흰 종이를 안 눌러 바로잡지 않은 색입니다. [흰 종이 누르기] 뒤 사진 속 흰 종이를 누르십시오.';
+  const keys = deckKeys($('phdeck').value, null);
+  const toRgb = L => L.map(v => Math.round(255 * Math.min(1, Math.max(0, v > 0.0031308 ? 1.055 * v ** (1/2.4) - 0.055 : 12.92 * v)))).join(',');
+  $('ppick').innerHTML = `<div class="row"><span class="c" style="background:rgb(${toRgb(smp.lin)})" title="사진 그대로"></span><span class="c" style="background:${lab2rgb(...lab)}" title="바로잡은 색"></span><div>${auto ? '사진 가운데 색' : '사진에서 고른 색'}${MAT ? ' · 재질 ' + esc(MAT.n) : ''}<div class="dim">${esc(how)}</div></div><small>L ${lab[0].toFixed(1)}<br>a ${lab[1].toFixed(1)} b ${lab[2].toFixed(1)}</small></div>`
+    + await rankHTML(lab, keys, 5, 'phdeck')
+    + `<button class="sub" id="phadd">이 색을 이색 묶음${CMSEL ? ' "' + esc(CMSEL) + '"' : ''}에 시료로 넣기 (사진)</button>`
+    + `<div class="note" style="margin-top:8px">사진은 기계보다 오차가 큽니다(보통 ΔE 3~6). 1~4순위 칩을 실제 견본책에서 꺼내 물건 옆에 대 보고 고르십시오.${auto ? ' 다른 곳 색을 보려면 사진 위를 누르십시오.' : ''}${MAT ? '' : ' 위 [무엇을 재나요?]에서 재질을 고르면 맞는 견본책부터 찾습니다.'}</div>`;
+  rankWire($('ppick'));
+  PHLAB = lab; $('phadd').onclick = () => cmAdd([{name: '사진 ' + (PHNAME || ''), lab: PHLAB}], '사진');
+}
+let PHLAB = null, PHNAME = '', PHFILES = [];
+// 본판 사진 여러 장: 장마다 가운데 색을 흰 종이로 바로잡아 목록으로 (누르면 그 사진을 크게)
+async function phMulti(files){
+  const W = PHW2, tgt = lab2lin(...PAPER), out = [];
+  for (let i = 0; i < files.length; i++){
+    $('pmulti').innerHTML = `<div class="msg">지금 하는 일: 사진 ${files.length}장 읽기 · ${i + 1}번째 <div style="height:8px;background:#e3e9f3;border-radius:4px;margin-top:4px"><i style="display:block;height:8px;border-radius:4px;background:#1e6fd9;width:${Math.round((i + 1) / files.length * 100)}%"></i></div> ${Math.round((i + 1) / files.length * 100)}%</div>`;
+    const img = await new Promise(res => loadImg(files[i], res));
+    const c = document.createElement('canvas'), k = Math.min(1, 700 / Math.max(img.width, img.height));
+    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    const g = c.getContext('2d'); g.drawImage(img, 0, 0, c.width, c.height);
+    const smp = areaLin(g, c.width / 2, c.height / 2, Math.max(4, Math.round(Math.min(c.width, c.height) / 12)), c.width, c.height);
+    const lab = W ? lin2lab(...smp.lin.map((v, j) => Math.min(1, v * tgt[j] / Math.max(W.lin[j], 1e-4)))) : lin2lab(...smp.lin);
+    out.push({i, name: files[i].name, lab});
+  }
+  const it = cmCur();
+  $('pmulti').innerHTML = `<h4 style="margin:10px 0 4px">본판 사진 ${out.length}장 (가운데 색${W ? ', 흰 종이로 바로잡음' : ', 흰 종이 없음'})</h4>`
+    + out.map(o => { const pt = ptNear(o.lab, 1)[0]; const de = it && it.master ? de2000(...it.master, ...o.lab) : null; const [v, c] = de != null ? cmJudge(de, it) : ['', '']; return `<div class="row tap" data-i="${o.i}"><span class="no">${o.i + 1}</span><span class="c" style="background:${lab2rgb(...o.lab)}"></span><div>${esc(o.name)}<div class="dim">L ${o.lab[0].toFixed(1)} a ${o.lab[1].toFixed(1)} b ${o.lab[2].toFixed(1)}${pt ? ' · 1순위 ' + esc(pt.name) : ''}</div></div><small>${de != null ? `<b style="color:${c}">${v}</b><br>원본 ΔE ${de.toFixed(2)}` : ''}</small></div>`; }).join('')
+    + `<button class="big" id="phall" style="margin-top:10px;background:#2e7d32">사진 ${out.length}장을 이색 묶음${CMSEL ? ' "' + esc(CMSEL) + '"' : ''}에 차례로 넣기</button>`;
+  $('phall').onclick = () => cmAdd(out.map(o => ({name: '사진 ' + o.name, lab: o.lab})), '사진');
+  $('pmulti').querySelectorAll('.row.tap').forEach(r => r.onclick = () => phShow(files[+r.dataset.i]));
+}
+function phShow(f){
+  PHNAME = f.name || '';
+  loadImg(f, img => {
     const c = $('pcv'), k = Math.min(1, 1400 / Math.max(img.width, img.height));
     c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-    $('pwrap').classList.remove('hidden'); $('pmark').style.display = 'none';
-    URL.revokeObjectURL(img.src);
-    pickAt(c.width / 2, c.height / 2, Math.max(4, Math.round(Math.min(c.width, c.height) / 12)), true);   // Ver 0.47: 올리자마자 가운데 색으로 바로 골라 줌
-  };
-  img.src = URL.createObjectURL(f);
-};
-$('pcv').onclick = e => {
-  const c = $('pcv'), r = c.getBoundingClientRect();
-  pickAt((e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height, Math.max(2, Math.round(c.width / 150)), false);
-};
-async function pickAt(x, y, s, auto){
-  const c = $('pcv'), r = c.getBoundingClientRect(); x = Math.round(x); y = Math.round(y);
-  const d = c.getContext('2d').getImageData(Math.max(0, x - s), Math.max(0, y - s), 2*s + 1, 2*s + 1).data;
-  let R = 0, G = 0, B = 0, n = 0; for (let i = 0; i < d.length; i += 4){ R += d[i]; G += d[i+1]; B += d[i+2]; n++; }
-  R = Math.round(R/n); G = Math.round(G/n); B = Math.round(B/n);
-  $('pmark').style.left = (x * r.width / c.width) + 'px'; $('pmark').style.top = (y * r.height / c.height) + 'px'; $('pmark').style.display = 'block';
-  await pantone();
-  const lab = rgb2lab(R, G, B), near = ptNear(lab, 6);
-  $('ppick').innerHTML = `<div class="row"><span class="c" style="background:rgb(${R},${G},${B})"></span>${auto ? '사진 가운데 색' : '사진에서 고른 색'}<small>L ${lab[0]} a ${lab[1]} b ${lab[2]}</small></div>`
-    + `<div class="dim" style="margin-top:6px">비슷한 팬톤색 (누르면 자세히)${auto ? ' · 다른 곳 색을 보려면 사진 위를 누르십시오' : ''}</div>`
-    + near.map(y => `<div class="row tap" data-n="${esc(y.name)}"><span class="c" style="background:${lab2rgb(...y.lab)}"></span>PANTONE ${esc(y.name)}<small>ΔE ${y.de.toFixed(2)}<br>${esc(y.deck)}</small></div>`).join('');
-};
-$('ppick').onclick = e => { const t = e.target.closest('.row.tap'); if (!t) return; const x = PT.get(norm(t.dataset.n)); if (x) ptDetail(x); };
+    $('pwrap').classList.remove('hidden'); $('pmark').style.display = 'none'; $('pmark2').style.display = 'none';
+    PHW1 = null;
+    if (PHMODE === 1){ phTap('w'); PHLAST = null; $('ppick').innerHTML = '<div class="msg">먼저 사진 속 <b>흰 종이</b>를 누르십시오. 그다음 잴 곳을 누르십시오.</div>'; return; }
+    pickAt(c.width / 2, c.height / 2, Math.max(4, Math.round(Math.min(c.width, c.height) / 12)), true);
+  });
+}
 
 
 // ---------------------------------------------------------------- 공용 저장소 (PC 프로그램과 같은 곳, 토큰 없음)
@@ -715,65 +1049,177 @@ function deckOf(devDeck){
   if (!DKMAP){ DKMAP = new Map(); for (const x of PTL) if (x.deckN && !DKMAP.has(deckNorm(x.deckN))) DKMAP.set(deckNorm(x.deckN), x.deck); }
   return DKMAP.get(deckNorm(devDeck)) || null;
 }
-// ---- Ver 0.57: 이색 비교 (기준 타일 ↔ 새 타일, ΔE2000 · 합격/주의/불합격) — 공용 문서 rm200/cm {ref, ok, warn}, rm200/cm_log [기록]
-let CM = {ref: null, ok: 1.5, warn: 3};
-function cmJudge(de){ return de <= CM.ok ? ['합격', '#2e7d32'] : de <= CM.warn ? ['주의', '#ef6c00'] : ['불합격', '#c62828']; }
+// ---- Ver 0.58: 이색 관리 — PC와 같은 공용 문서 rm200/cm
+//   {묶음 이름: {master:[L,a,b], ref:시료 키, ok, warn(=불합격 시작), created, records:{키: {no, date, lot, lab, n, src, who, dE, dL, da, db}}}}
+let CMD = {}, CMSEL = '', CMT = null;
+const CMOK = [0.3, 0.5, 0.7, 0.8, 1, 1.2, 1.5, 2, 2.5, 3], CMBAD = [1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 8];
+const isSet = v => v && typeof v === 'object' && !Array.isArray(v) && ('records' in v || 'master' in v);
+function cmSets(){ return Object.keys(CMD).filter(k => isSet(CMD[k])); }
+function cmCur(){ return isSet(CMD[CMSEL]) ? CMD[CMSEL] : null; }
+function cmTol(it){ return [+(it && it.ok) || 1, +(it && it.warn) || 3]; }
+function cmJudge(de, it){ const [ok, bad] = cmTol(it || cmCur()); return de <= ok ? ['합격', '#2e7d32'] : de < bad ? ['주의', '#ef6c00'] : ['불합격', '#c62828']; }
+function cmRecs(it){ return Object.entries((it && it.records) || {}).map(([k, r]) => ({...r, key: k})).filter(r => Array.isArray(r.lab)).sort((a, b) => (a.no || 1e9) - (b.no || 1e9) || String(a.date).localeCompare(String(b.date))); }
+function cmDir(dL, da, db){ const o = []; if (Math.abs(dL) >= 0.5) o.push(dL > 0 ? '더 밝음' : '더 어두움'); if (Math.abs(da) >= 0.5) o.push(da > 0 ? '더 붉음' : '더 초록빛'); if (Math.abs(db) >= 0.5) o.push(db > 0 ? '더 누러움' : '더 푸름'); return o.join(', ') || '거의 같음'; }
+function cmFix(it){   // 원본이 바뀌면 모든 시료의 차이 값을 다시 매김(예전 PC 판도 같은 값을 보게)
+  if (!it.master) return;
+  const [mL, ma, mb] = it.master;
+  for (const r of Object.values(it.records || {})) if (Array.isArray(r.lab)){ r.dE = Math.round(de2000(mL, ma, mb, ...r.lab) * 1000) / 1000; r.dL = r.lab[0] - mL; r.da = r.lab[1] - ma; r.db = r.lab[2] - mb; }
+}
+function nowStr(){ const t = new Date(), z = n => String(n).padStart(2, '0'); return `${t.getFullYear()}-${z(t.getMonth()+1)}-${z(t.getDate())} ${z(t.getHours())}:${z(t.getMinutes())}`; }
+async function cmMigrate(m){
+  m = m && typeof m === 'object' && !Array.isArray(m) ? m : {};
+  if (m.ref && Array.isArray(m.ref.lab) && !isSet(m.ref)){   // 앱 0.57이 쓰던 {ref, ok, warn} → 묶음 하나로 옮김(빠짐없이)
+    const nm = '앱 기준 타일 (0.57)', it = {master: m.ref.lab.map(Number), created: nowStr(), ok: +m.ok || 1, warn: +m.warn || 3, records: {}};
+    it.records[`${nowStr()}|${m.ref.name}`] = {no: 1, date: nowStr(), lot: '원본: ' + m.ref.name, lab: m.ref.lab.map(Number), n: 1, src: '앱 0.57'};
+    it.ref = Object.keys(it.records)[0];
+    try { const [L] = await getDoc('rm200/cm_log'); (Array.isArray(L) ? L : []).slice().reverse().forEach((x, i) => { if (Array.isArray(x.lab)) it.records[`${x.when || ''}|${x.name}|${i}`] = {no: i + 2, date: x.when || '', lot: x.name, lab: x.lab.map(Number), n: 1, src: '앱 0.57', who: x.who || ''}; }); } catch(e){}
+    cmFix(it); m[nm] = it;
+  }
+  for (const k of ['ref', 'ok', 'warn']) if (k in m && !isSet(m[k])) delete m[k];
+  return m;
+}
+async function cmLoad(){
+  try { const [m, u] = await getDoc('rm200/cm'); const had = JSON.stringify(m); const mm = await cmMigrate(m); CMD = mm; if (JSON.stringify(mm) !== had && m) await putDoc('rm200/cm', mm, u); } catch(e){}
+  if (!CMSEL){ try { CMSEL = localStorage.getItem('rm200_cmset') || ''; } catch(e){} }
+  if (!cmCur()) CMSEL = cmSets().slice(-1)[0] || '';
+  cmDraw();
+  clearTimeout(CMT); CMT = setTimeout(() => { if (!$('t-cm').classList.contains('hidden') && !document.hidden) cmLoad(); }, 20000);   // PC·다른 모바일 폰이 넣은 시료도 저절로 보임
+}
+async function cmOp(fn, msg){   // 공용 문서를 새로 읽어 고친 뒤 씀(다른 기기와 겹치면 다시)
+  for (let i = 0; i < 6; i++){
+    try {
+      const [m0, u] = await getDoc('rm200/cm'); const m = await cmMigrate(m0);
+      const r = fn(m); if (r === false) return false;
+      if (await putDoc('rm200/cm', m, u)){ CMD = m; cmDraw(); if (msg) toast(msg); return true; }
+    } catch(e){}
+    await sleep(300 + Math.random() * 400);
+  }
+  toast('공용 저장소에 저장하지 못했습니다(인터넷 확인 뒤 다시 누르십시오)'); return false;
+}
+function cmNew(name){
+  name = String(name || '').trim(); if (!name) return toast('묶음 이름을 쓰십시오');
+  return cmOp(m => { if (m[name]) return; m[name] = {master: null, ref: null, created: nowStr(), ok: 1, warn: 3, records: {}}; }, `"${name}" 묶음을 만들었습니다. 시료를 넣으면 1번이 원본이 됩니다`)
+    .then(ok => { if (ok){ CMSEL = name; try { localStorage.setItem('rm200_cmset', name); } catch(e){} cmDraw(); } });
+}
+async function cmAdd(samples, src){
+  if (!samples.length) return toast('넣을 색이 없습니다');
+  if (!cmCur() && !CMSEL){ CMSEL = `이색 ${today()}`; try { localStorage.setItem('rm200_cmset', CMSEL); } catch(e){} }
+  const name = CMSEL;
+  return cmOp(m => {
+    const it = isSet(m[name]) ? m[name] : (m[name] = {master: null, ref: null, created: nowStr(), ok: 1, warn: 3, records: {}});
+    it.records = it.records || {};
+    let no = Math.max(0, ...Object.values(it.records).map(r => +r.no || 0));
+    for (const x of samples){
+      no++;
+      let k = `${x.date || nowStr()}|${x.name || ('시료 ' + no)}`; while (it.records[k]) k += '+';
+      it.records[k] = {no, date: x.date || nowStr(), lot: x.name || ('시료 ' + no), lab: x.lab.map(v => Math.round(+v * 1000) / 1000), n: 1, src: x.src || src || '앱', who: myName()};
+      if (!it.master){ it.master = it.records[k].lab.slice(); it.ref = k; }
+    }
+    cmFix(it);
+  }, `"${name}"에 시료 ${samples.length}개를 넣었습니다`);
+}
+function cmSetRef(key){ const name = CMSEL; return cmOp(m => { const it = m[name]; if (!isSet(it) || !it.records[key]) return false; it.master = it.records[key].lab.slice(); it.ref = key; cmFix(it); }, `${(cmCur().records[key] || {}).no || ''}번을 원본으로 바꿨습니다. 모든 시료를 다시 매겼습니다`); }
+function cmDel(key){ const name = CMSEL; return cmOp(m => { const it = m[name]; if (!isSet(it) || !it.records[key]) return false; delete it.records[key]; if (it.ref === key) it.ref = null; }, '시료를 지웠습니다'); }
+function cmRen(key, lot){ const name = CMSEL; return cmOp(m => { const it = m[name]; if (!isSet(it) || !it.records[key]) return false; it.records[key].lot = lot; }, '이름을 바꿨습니다'); }
+function cmTolSet(){ const name = CMSEL, a = +$('cmokS').value, b = +$('cmbadS').value;
+  if (!(b > a)){ toast('불합격 값은 합격 값보다 커야 합니다'); cmDraw(); return; }
+  cmOp(m => { const it = m[name]; if (!isSet(it)) return false; it.ok = a; it.warn = b; }, `합격 ≤ ${a}, 불합격 ≥ ${b} 로 다시 매겼습니다`); }
 function cmDraw(){
-  const r = CM.ref;
-  $('cmref').innerHTML = r ? `<span class="c" style="background:${lab2rgb(...r.lab)}"></span><div>기준 타일: <b>${esc(r.name)}</b><div class="dim">L ${(+r.lab[0]).toFixed(2)} a ${(+r.lab[1]).toFixed(2)} b ${(+r.lab[2]).toFixed(2)} · ${esc(r.who || '')} ${esc(r.when || '')}</div></div>` : '<span class="c" style="background:#eee"></span><div>기준 타일: 아직 없음</div>';
-  $('cmok').value = CM.ok; $('cmwarn').value = CM.warn;
+  const sets = cmSets(), it = cmCur();
+  $('cmsel').innerHTML = sets.map(k => `<option value="${esc(k)}">${esc(k)} (${Object.keys(CMD[k].records || {}).length}개)</option>`).join('') + '<option value="@new">＋ 새 묶음 만들기</option>';
+  if (it) $('cmsel').value = CMSEL; else $('cmsel').value = '@new';
+  const [ok, bad] = cmTol(it);
+  const opts = (L, v) => [...new Set(L.concat([v]))].sort((x, y) => x - y).map(x => `<option value="${x}">${x}</option>`).join('');
+  $('cmokS').innerHTML = opts(CMOK, ok); $('cmokS').value = String(ok);
+  $('cmbadS').innerHTML = opts(CMBAD, bad); $('cmbadS').value = String(bad);
+  const rs = cmRecs(it);
+  const ref = it && it.ref && it.records && it.records[it.ref];
+  $('cmmaster').innerHTML = !it ? '<h4 style="margin:0 0 6px">원본</h4><div class="dim">위에서 묶음을 고르거나 [＋ 새 묶음 만들기]를 하십시오. 묶음 없이 시료를 넣으면 오늘 날짜 묶음이 저절로 생깁니다.</div>'
+    : !it.master ? '<h4 style="margin:0 0 6px">원본</h4><div class="dim">아직 시료가 없습니다. 처음 넣는 시료가 1번 원본이 됩니다.</div>'
+    : `<h4 style="margin:0 0 6px">원본 ★ ${ref ? (ref.no || '') + '번 ' + esc(ref.lot || '') : '(처음 등록한 기준색)'}</h4><div class="sw" style="height:90px;background:${lab2rgb(...it.master)}"></div><div class="dim" style="margin-top:6px">L ${(+it.master[0]).toFixed(2)}  a ${(+it.master[1]).toFixed(2)}  b ${(+it.master[2]).toFixed(2)}${ref ? ' · ' + esc(ref.date || '') + ' · ' + esc(ref.src || '') : ''}${it.ref === null && Object.keys(it.records || {}).length && it.master ? ' · 원본 시료를 지웠습니다. 다른 시료를 눌러 원본으로 고르십시오' : ''}</div>`;
+  $('cmcnt').textContent = rs.length + '개';
+  let nOk = 0, nW = 0, nB = 0;
+  $('cmrows').innerHTML = rs.map(r => {
+    const isRef = it.ref === r.key, de = it.master ? de2000(...it.master, ...r.lab) : 0, [v, c] = cmJudge(de, it);
+    if (!isRef && it.master){ if (v === '합격') nOk++; else if (v === '주의') nW++; else nB++; }
+    const dL = it.master ? r.lab[0] - it.master[0] : 0, da = it.master ? r.lab[1] - it.master[1] : 0, db = it.master ? r.lab[2] - it.master[2] : 0;
+    return `<div class="row tap" data-k="${esc(r.key)}"><span class="no">${r.no || ''}</span><span class="c" style="background:${lab2rgb(...r.lab)}"></span><div>${esc(r.lot || '')}${r.src === '사진' ? ' <span class="dim">(사진)</span>' : ''}<div class="dim">${esc(String(r.date || '').slice(5))} · ${isRef ? '원본' : esc(cmDir(dL, da, db))}</div></div><small>${isRef ? '<span class="vb" style="background:#1e3a6e">★ 원본</span>' : `<span class="vb" style="background:${c}">${v}</span><br>ΔE ${de.toFixed(2)}`}</small></div>`;
+  }).join('') || '<div class="dim">아직 시료가 없습니다.</div>';
+  $('cmsum').innerHTML = it && it.master && rs.length > 1 ? `<b style="color:#2e7d32">합격 ${nOk}</b> · <b style="color:#ef6c00">주의 ${nW}</b> · <b style="color:#c62828">불합격 ${nB}</b> <span class="dim">(원본 빼고 ${rs.length - (it.ref && it.records[it.ref] ? 1 : 0)}개)</span>` : '';
+  // 차이 그래프(번호 차례)
+  const pts = it && it.master ? rs.map(r => ({no: r.no, de: de2000(...it.master, ...r.lab), ref: it.ref === r.key})) : [];
+  if (pts.length > 1){
+    const W = 320, H = 120, ym = Math.max(bad * 1.4, ...pts.map(p => p.de)) * 1.05, X = i => 24 + (W - 34) * (pts.length > 1 ? i / (pts.length - 1) : .5), Y = v => H - 16 - (H - 26) * v / ym;
+    $('cmchart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;margin:6px 0"><rect x="24" y="${Y(ok)}" width="${W - 34}" height="${Y(0) - Y(ok)}" fill="#e8f5e9"/><rect x="24" y="${Y(bad)}" width="${W - 34}" height="${Y(ok) - Y(bad)}" fill="#fff3e0"/><rect x="24" y="${Y(ym)}" width="${W - 34}" height="${Y(bad) - Y(ym)}" fill="#fdecea"/>`
+      + `<polyline fill="none" stroke="#1e6fd9" stroke-width="1.5" points="${pts.map((p, i) => X(i) + ',' + Y(p.de)).join(' ')}"/>`
+      + pts.map((p, i) => `<circle cx="${X(i)}" cy="${Y(p.de)}" r="4" fill="${p.ref ? '#1e3a6e' : cmJudge(p.de, it)[1]}"/><text x="${X(i)}" y="${H - 3}" font-size="9" text-anchor="middle" fill="#555">${p.no}</text>`).join('')
+      + `<text x="2" y="${Y(ok) + 3}" font-size="8" fill="#2e7d32">${ok}</text><text x="2" y="${Y(bad) + 3}" font-size="8" fill="#c62828">${bad}</text></svg>`;
+  } else $('cmchart').innerHTML = '';
   if (typeof BR !== 'undefined' && BR.length) bdraw();
 }
-async function cmLoad(){ try { const [m] = await getDoc('rm200/cm'); if (m) CM = Object.assign(CM, m); } catch(e){} cmDraw(); cmLogLoad(); }
-async function cmSave(){ for (let i = 0; i < 5; i++){ try { const [, u] = await getDoc('rm200/cm'); if (await putDoc('rm200/cm', CM, u)) return true; } catch(e){} await sleep(300); } toast('공용 저장소에 저장하지 못했습니다(인터넷 확인)'); return false; }
-async function cmLogLoad(){
-  let L = []; try { const [m] = await getDoc('rm200/cm_log'); if (Array.isArray(m)) L = m; } catch(e){}
-  $('cmn').textContent = L.length ? `(${L.length}개)` : '';
-  $('cmlog').innerHTML = L.length ? L.map(x => { const [v, c] = cmJudge(x.de); return `<div class="row"><span class="c" style="background:${lab2rgb(...x.lab)}"></span><div>${esc(x.name)}<div class="dim">${esc(x.when)} · 기준 ${esc(x.ref)} · ${esc(x.who || '')}</div></div><small><b style="color:${c}">${v}</b><br>ΔE ${(+x.de).toFixed(2)}</small></div>`; }).join('') : '<div class="dim">아직 기록이 없습니다</div>';
-}
-async function cmSetRef(name, lab){
-  const t = new Date(); CM.ref = {name, lab: lab.map(Number), who: myName(), when: `${t.getMonth()+1}/${t.getDate()} ${t.toTimeString().slice(0,5)}`};
-  cmDraw(); $('pdet').classList.add('hidden'); toast(`기준 타일을 "${name}"(으)로 정했습니다`); await cmSave();
-}
-async function cmRecord(name, lab){
-  if (!CM.ref) return toast('먼저 기준 타일을 정하십시오');
-  const de = de2000(...CM.ref.lab, ...lab), [v] = cmJudge(de), t = new Date();
-  const item = {name, lab: lab.map(Number), de: Math.round(de * 100) / 100, v, ref: CM.ref.name, who: myName(), when: `${t.getMonth()+1}/${t.getDate()} ${t.toTimeString().slice(0,5)}`, t: Math.floor(t / 1000)};
-  for (let i = 0; i < 5; i++){
-    try { const [m, u] = await getDoc('rm200/cm_log'); const L = Array.isArray(m) ? m : []; if (await putDoc('rm200/cm_log', [item].concat(L).slice(0, 300), u)) break; } catch(e){}
-    await sleep(300);
+$('cmsel').onchange = () => {
+  if ($('cmsel').value === '@new'){
+    $('pdet').innerHTML = '<h4>새 비교 묶음</h4><div class="note">예: LVS-1814 11월 납품, 데코타일 A 로트</div><input type="text" id="cmnewn" placeholder="묶음 이름"><button class="big" id="cmnewok" style="margin-top:10px">만들기</button><button class="sub" id="pdetx">닫기</button>';
+    $('pdet').classList.remove('hidden'); $('cmnewn').focus();
+    $('cmnewok').onclick = () => { $('pdet').classList.add('hidden'); cmNew($('cmnewn').value); };
+    $('pdetx').onclick = () => { $('pdet').classList.add('hidden'); cmDraw(); };
+    return;
   }
-  $('pdet').classList.add('hidden'); toast(`이색 기록: ${name} ΔE ${item.de.toFixed(2)} ${v}`); cmLogLoad();
-}
-$('cmok').onchange = $('cmwarn').onchange = () => {
-  const a = +$('cmok').value, b = +$('cmwarn').value;
-  if (!(a > 0 && b >= a)){ toast('합격 값은 0보다 크고 주의 값보다 작거나 같아야 합니다'); cmDraw(); return; }
-  CM.ok = a; CM.warn = b; cmDraw(); cmSave();
+  CMSEL = $('cmsel').value; try { localStorage.setItem('rm200_cmset', CMSEL); } catch(e){} cmDraw();
 };
+$('cmokS').onchange = $('cmbadS').onchange = cmTolSet;
+$('cmreload').onclick = () => { cmLoad(); toast('다시 읽었습니다'); };
+$('cmcopy').onclick = async () => {
+  const it = cmCur(); if (!it) return toast('묶음이 없습니다');
+  const rows = [['번호', '이름', '날짜', 'L', 'a', 'b', 'ΔE2000', '판정', '어느 쪽으로', '넣은 곳']].concat(cmRecs(it).map(r => { const isRef = it.ref === r.key, de = it.master ? de2000(...it.master, ...r.lab) : 0; return [r.no, r.lot, r.date, ...r.lab.map(v => (+v).toFixed(2)), isRef ? '-' : de.toFixed(2), isRef ? '원본' : cmJudge(de, it)[0], isRef ? '' : cmDir(r.lab[0] - it.master[0], r.lab[1] - it.master[1], r.lab[2] - it.master[2]), r.src || '']; }));
+  const t = `이색 관리: ${CMSEL} (합격 ≤ ${cmTol(it)[0]}, 불합격 ≥ ${cmTol(it)[1]})\n` + rows.map(r => r.join('\t')).join('\n');
+  try { navigator.clipboard.writeText(t).catch(() => {}); } catch(e){} if (window.RMAPP) RMAPP.copy(t);
+  toast('표를 복사했습니다. 엑셀이나 카카오톡에 붙여 넣으십시오');
+};
+$('cmrows').onclick = e => {
+  const r = e.target.closest('.row.tap'); if (!r) return;
+  const it = cmCur(), x = it.records[r.dataset.k]; if (!x) return;
+  const key = r.dataset.k, isRef = it.ref === key, de = it.master ? de2000(...it.master, ...x.lab) : 0, [v, c] = cmJudge(de, it);
+  $('pdet').innerHTML = `<div class="cmp"><i style="background:${it.master ? lab2rgb(...it.master) : '#eee'}"></i><i style="background:${lab2rgb(...x.lab)}"></i></div><div class="dim" style="display:flex;justify-content:space-between;margin-top:4px"><span>원본</span><span>${x.no}번 시료</span></div>`
+    + `<div class="code" style="font-size:21px">${x.no}번 ${esc(x.lot || '')}</div><div class="dim">${esc(x.date || '')} · ${esc(x.src || '')} ${esc(x.who || '')} · L ${(+x.lab[0]).toFixed(2)} a ${(+x.lab[1]).toFixed(2)} b ${(+x.lab[2]).toFixed(2)}</div>`
+    + (isRef ? '<div class="msg">이 시료가 지금 원본입니다.</div>' : it.master ? `<div class="msg">원본과 차이 <b>ΔE ${de.toFixed(2)}</b> → <b style="color:${c}">${v}</b><br>${esc(cmDir(x.lab[0] - it.master[0], x.lab[1] - it.master[1], x.lab[2] - it.master[2]))} (ΔL ${(x.lab[0] - it.master[0]).toFixed(2)} Δa ${(x.lab[1] - it.master[1]).toFixed(2)} Δb ${(x.lab[2] - it.master[2]).toFixed(2)})</div>` : '')
+    + (isRef ? '' : '<button class="big" id="cmref1" style="margin-top:10px">이 시료를 원본으로</button>')
+    + `<div style="display:flex;gap:8px;margin-top:10px"><input type="text" id="cmlot" value="${esc(x.lot || '')}"><button class="sub" id="cmlotok" style="margin:0;width:auto;padding:0 14px">이름 저장</button></div>`
+    + '<div style="display:flex;gap:8px"><button class="sub" id="cmpt">팬톤 순위 보기</button><button class="sub" id="cmdel" style="color:#c62828">지우기</button></div><button class="sub" id="pdetx">닫기</button>';
+  $('pdet').classList.remove('hidden');
+  const close = () => $('pdet').classList.add('hidden');
+  $('pdetx').onclick = close;
+  if ($('cmref1')) $('cmref1').onclick = () => { close(); cmSetRef(key); };
+  $('cmlotok').onclick = () => { close(); cmRen(key, $('cmlot').value.trim()); };
+  $('cmpt').onclick = () => colorDetail(`${x.no}번 ${x.lot || ''}`, CMSEL, x.lab, null, null);
+  $('cmdel').onclick = () => { if ($('cmdel').dataset.sure){ close(); cmDel(key); } else { $('cmdel').dataset.sure = 1; $('cmdel').textContent = '한 번 더 누르면 지웁니다'; } };
+};
+$('devslot-cm').appendChild($('devcards'));
 cmLoad();
 // 잰 색 하나 자세히: 같은 견본책·모든 견본책에서 비슷한 팬톤, 우리 물건
 function measDetail(r){ return colorDetail('잰 색 ' + (r.when ? r.when.slice(5, 16) : ''), r.deck || '', r.lab, r.deck, '잰 색 ' + (r.when ? r.when.slice(5, 16) : '')); }
 async function colorDetail(title, sub, lab, devDeck, cmName){
   await pantone().catch(() => null);
   const r = {lab};
-  const dk = $('mdeck').value || deckOf(devDeck), same = dk ? ptNear(r.lab, 3, dk) : [], all = ptNear(r.lab, 3);
+  await matLoad();
+  const keys = deckKeys($('mdeck').value, devDeck).filter(k => k), all = ptNear(r.lab, 5);
+  const same = keys.length ? await rankHTML(r.lab, keys, 5) : '';
   const items = palItems(await palettes());
   const own = items.map(y => ({...y, de: de2000(...r.lab, ...y.lab)})).sort((a, b) => a.de - b.de).slice(0, 5);
   const row = y => `<div class="row tap" data-n="${esc(y.name)}"><span class="c" style="background:${lab2rgb(...y.lab)}"></span>PANTONE ${esc(y.name)}<small>ΔE ${y.de.toFixed(2)}<br>${esc(y.deck)}</small></div>`;
-  const rk = L => '<div class="rk">' + L.map((x, i) => `<div class="${i ? '' : 'r1'} tap" data-n="${esc(x.name)}"><i style="background:${lab2rgb(...x.lab)}"></i><b>${i + 1}순위</b><span>${esc(x.name)}</span><small>ΔE ${x.de.toFixed(2)}</small></div>`).join('') + '</div>';
+  const rk = L => '<div class="rk">' + L.map((x, i) => `<div class="${i ? '' : 'r1'} tap" data-n="${esc(x.name)}"><i style="background:${lab2rgb(...x.lab)}"></i><b>${i + 1}순위</b><span>${esc(x.name)}</span><small>ΔE ${x.de.toFixed(2)}<br>${esc(x.deck)}</small></div>`).join('') + '</div>';
   const nm = cmName || title;
-  const cmh = CM.ref ? (() => { const de = de2000(...CM.ref.lab, ...r.lab), [v, c] = cmJudge(de); return `<div class="msg" style="margin-top:8px">기준 타일 "${esc(CM.ref.name)}"과 차이 <b>ΔE ${de.toFixed(2)}</b> → <b style="color:${c}">${v}</b></div>`; })() : '';
+  const it0 = cmCur(), cmh = it0 && it0.master ? (() => { const de = de2000(...it0.master, ...r.lab), [v, c] = cmJudge(de, it0); return `<div class="msg" style="margin-top:8px">이색 묶음 "${esc(CMSEL)}" 원본과 차이 <b>ΔE ${de.toFixed(2)}</b> → <b style="color:${c}">${v}</b></div>`; })() : '';
   $('pdet').innerHTML = `<div class="sw" style="height:110px;background:${lab2rgb(...r.lab)}"></div><div class="code" style="font-size:21px">${esc(title)}</div><div class="dim">${esc(sub)} · L ${(+r.lab[0]).toFixed(1)} a ${(+r.lab[1]).toFixed(1)} b ${(+r.lab[2]).toFixed(1)}</div>`
-    + cmh + `<div style="display:flex;gap:8px"><button class="sub" id="cmset">기준 타일로 정하기</button>${CM.ref ? '<button class="sub" id="cmrec">이색 기록에 남기기</button>' : ''}</div>`
-    + (same.length ? `<h4 style="margin-top:12px">${esc(dk)}에서 가장 가까운 팬톤색</h4>` + rk(same) : '')
-    + `<h4 style="margin-top:12px">${same.length ? '모든 견본책에서' : '가장 가까운 팬톤색'}</h4>` + rk(all)
+    + cmh + (cmName ? `<button class="sub" id="cmset">이색 묶음 "${esc(CMSEL || '오늘 날짜')}"에 시료로 넣기</button>` : '')
+    + (same ? `<h4 style="margin-top:12px">${MAT ? '재질 ' + esc(MAT.n) + '에 맞는 ' : ''}견본책에서 가장 가까운 팬톤색</h4>` + same : '')
+    + `<h4 style="margin-top:12px">${same ? '모든 견본책에서' : '가장 가까운 팬톤색'}</h4>` + rk(all)
     + (own.length ? '<h4 style="margin-top:12px">우리 물건 중 가까운 것</h4>' + own.map(y => `<div class="row"><span class="c" style="background:${lab2rgb(...y.lab)}"></span>${esc(y.name)}<small>ΔE ${y.de.toFixed(2)}<br>${esc(y.pal)}</small></div>`).join('') : '')
     + '<div class="note" style="margin-top:6px">팬톤색을 누르면 [팬톤 색] 칸의 견본책에서 그 색을 보여 줍니다.</div><button class="sub" id="pdetx">닫기</button>';
   $('pdet').classList.remove('hidden');
   $('pdetx').onclick = () => $('pdet').classList.add('hidden');
-  $('pdet').querySelectorAll('.row.tap,.rk .tap').forEach(e => e.onclick = () => openInDeck(e.dataset.n));
-  $('cmset').onclick = () => cmSetRef(nm, r.lab);
-  if ($('cmrec')) $('cmrec').onclick = () => cmRecord(nm, r.lab);
+  $('pdet').querySelectorAll('.row.tap,.rk .tap').forEach(e => { if (e.dataset.n) e.onclick = () => openInDeck(e.dataset.n); });
+  if ($('cmset')) $('cmset').onclick = () => { $('pdet').classList.add('hidden'); cmAdd([{name: nm, lab: r.lab}], '앱'); };
 }
 // 팬톤색 보기에서 그 색 찾아 보이기
 async function openInDeck(name){
@@ -789,7 +1235,7 @@ async function openInDeck(name){
   ptDetail(x);
 }
 // ---- 기계 칸 ----
-function devNeed(){ if (!dev){ toast('먼저 [측정] 칸에서 기계를 연결하십시오'); return false; } if (busy){ toast('기계가 다른 일을 하는 중입니다. 잠시 뒤에 누르십시오'); return false; } return true; }
+function devNeed(){ if (!dev){ toast('먼저 [이색 관리]나 [컬러 찾기] 칸에서 기계를 연결하십시오'); return false; } if (busy){ toast('기계가 다른 일을 하는 중입니다. 잠시 뒤에 누르십시오'); return false; } return true; }
 const cstr = b => { let s = ''; for (const c of (b || [])){ if (!c) break; s += String.fromCharCode(c); } return s.trim(); };
 $('dinfo').onclick = async () => {
   if (!devNeed()) return; busy = true;
@@ -867,20 +1313,24 @@ $('dver').onclick = async () => {
 };
 document.querySelector('nav button[data-t=dev]').addEventListener('click', () => { $('devoff').classList.toggle('hidden', !!dev); });
 
-async function show(list){
+async function show(list, redraw){
   await pantone().catch(() => null);
   const top = list[0]; const hit = findPT(top.name);
   $('res').classList.remove('hidden');
   // Ver 0.50: 잰 색과 가장 가까운 팬톤색 1·2·3순위(고른 견본책, 없으면 기계가 고른 견본책)
-  const dk = $('mdeck').value || (hit && hit.deck) || deckOf(top.deck);
-  const rank = hit ? ptNear(hit.lab, 3, dk) : [];
+  LASTSHOW = list;
+  if (!redraw && $('t-meas').classList.contains('hidden')) document.querySelector('nav button[data-t=meas]').click();   // 잰 결과는 [컬러 찾기] 칸에
+  await matLoad(); await palettes().catch(() => null);
+  // Ver 0.58: 재질·가진 견본책에 맞춰 1~4순위 (재질도 견본책도 안 고르면 기계가 고른 견본책)
+  const keys = deckKeys($('mdeck').value, top.deck);
+  const rank = hit ? rankFor(hit.lab, keys[0], 4) : [];
   const one = rank[0];
   $('sw').style.background = one ? lab2rgb(...one.lab) : hit ? lab2rgb(...hit.lab) : '#ddd';
-  $('code').textContent = one ? 'PANTONE ' + one.name : top.name.replace('PANTONE® ', 'PANTONE ');
-  $('deck').textContent = one ? `1순위 · ${one.deck}` : top.deck + (top.page ? ` · ${top.page}` : '');
+  $('code').textContent = one ? (one.pal ? '' : 'PANTONE ') + one.name : top.name.replace('PANTONE® ', 'PANTONE ');
+  $('deck').textContent = one ? `1순위 · ${one.deck || one.pal}` : top.deck + (top.page ? ` · ${top.page}` : '');
   $('lab').textContent = one && one.name !== hit.name ? `기계가 고른 색: ${top.name.replace('PANTONE® ', '')} (${top.deck}) → 고른 견본책에서 가장 가까운 색` : hit ? `견본 Lab  L ${hit.lab[0]}  a ${hit.lab[1]}  b ${hit.lab[2]}` : '';
-  $('rank').innerHTML = rank.map((x, i) => `<div class="${i ? '' : 'r1'}" data-n="${esc(x.name)}"><i style="background:${lab2rgb(...x.lab)}"></i><b>${i + 1}순위</b><span>${esc(x.name)}</span><small>ΔE ${x.de.toFixed(2)}</small></div>`).join('');
-  $('rank').querySelectorAll('div[data-n]').forEach(e => e.onclick = () => openInDeck(e.dataset.n));
+  $('rank').innerHTML = hit ? (MAT ? `<div class="rkh">재질: <b>${esc(MAT.n)}</b></div>` : '') + await rankHTML(hit.lab, keys, 5, 'mdeck') : '';
+  rankWire($('rank'));
   const seen = new Set([norm(top.name), ...rank.map(x => norm(x.name))]); const more = [];
   for (const it of list.slice(1)){ const k = norm(it.name); if (seen.has(k)) continue; seen.add(k); const h = findPT(it.name);
     more.push(`<div class="row"><span class="c" style="background:${h ? lab2rgb(...h.lab) : '#ddd'}"></span>${esc(it.name)}<small>${esc(it.deck)}</small></div>`); }
@@ -893,6 +1343,7 @@ async function show(list){
       $('own').innerHTML = '<h4>우리 물건 중 가까운 것</h4>' + near.map(x => `<div class="row"><span class="c" style="background:${lab2rgb(...x.lab)}"></span>${esc(x.name)}<small>ΔE ${x.de.toFixed(2)}<br>${esc(x.pal)}</small></div>`).join('');
     }
   }
+  if (redraw) return;
   const t = new Date();
   addLog({name: top.name, deck: top.deck, lab: hit ? hit.lab : null, who: myName(), when: `${t.getMonth()+1}/${t.getDate()} ${t.toTimeString().slice(0,5)}`, t: Math.floor(t/1000)})
     .catch(() => toast('공용 기록에 올리지 못했습니다(인터넷 확인)'));
@@ -985,9 +1436,10 @@ function today(){ const t = new Date(); return `${t.getFullYear()}-${String(t.ge
 function bdraw(){
   $('bsel').classList.toggle('hidden', !BR.length); $('btip').classList.toggle('hidden', !BR.length);
   $('bcnt').textContent = `${BON.size} / ${BR.length}개`;
-  $('blist').innerHTML = BR.map((r, i) => `<div class="row tap" data-i="${i}" style="${r.old ? 'opacity:.55' : ''}"><span class="ck" style="padding:8px 6px 8px 0"><input type="checkbox" ${BON.has(i) ? 'checked' : ''} style="width:24px;height:24px;flex:none;pointer-events:none;display:block"></span><span class="c" style="background:${lab2rgb(...r.lab)}"></span><div>${esc(r.name || (r.pt ? r.pt.name : '측정'))}<div class="dim">${esc(r.when.slice(5,16))} · L ${r.lab[0]} a ${r.lab[1]} b ${r.lab[2]}</div></div><small>${CM.ref ? (() => { const de = de2000(...CM.ref.lab, ...r.lab), [v, c] = cmJudge(de); return `<b style="color:${c}">${v}</b><br>기준 ΔE ${de.toFixed(2)}`; })() : r.pt ? esc(r.pt.name) + '<br>ΔE ' + r.pt.de.toFixed(2) : ''}${r.old ? '<br>들여옴' : ''}</small></div>`).join('');
+  $('blist').innerHTML = BR.map((r, i) => `<div class="row tap" data-i="${i}" style="${r.old ? 'opacity:.55' : ''}"><span class="ck" style="padding:8px 6px 8px 0"><input type="checkbox" ${BON.has(i) ? 'checked' : ''} style="width:24px;height:24px;flex:none;pointer-events:none;display:block"></span><span class="c" style="background:${lab2rgb(...r.lab)}"></span><div>${esc(r.name || (r.pt ? r.pt.name : '측정'))}<div class="dim">${esc(r.when.slice(5,16))} · L ${r.lab[0]} a ${r.lab[1]} b ${r.lab[2]}</div></div><small>${cmCur() && cmCur().master ? (() => { const de = de2000(...cmCur().master, ...r.lab), [v, c] = cmJudge(de); return `<b style="color:${c}">${v}</b><br>원본 ΔE ${de.toFixed(2)}`; })() : r.pt ? esc(r.pt.name) + '<br>ΔE ' + r.pt.de.toFixed(2) : ''}${r.old ? '<br>들여옴' : ''}</small></div>`).join('');
   $('bput').classList.toggle('hidden', !BR.length);
   $('bgo').textContent = `고른 색 ${BON.size}개 내 팔레트에 넣기`;
+  $('bcmadd').textContent = `고른 색 ${BON.size}개 이색 묶음${CMSEL ? ' "' + CMSEL + '"' : ''}에 넣기`;
 }
 $('blist').onclick = e => { const r = e.target.closest('.row'); if (!r) return; const i = +r.dataset.i;
   if (e.target.closest('.ck')){ BON.has(i) ? BON.delete(i) : BON.add(i); bdraw(); return; }
@@ -1022,7 +1474,7 @@ async function bulkRead(reboot){
     if (!recs) throw err;
     await pantone().catch(() => null);
     const done = doneKeys();
-    BR = recs.map(r => ({...r, pt: ptNear(r.lab, 1, $('mdeck').value || deckOf(r.deck))[0] || nearestPT(r.lab), old: done.has(bkey(r))}));
+    BR = recs.map(r => ({...r, pt: rankFor(r.lab, deckKeys($('mdeck').value, r.deck)[0], 1)[0] || nearestPT(r.lab), old: done.has(bkey(r))}));
     BON = new Set(BR.map((r, i) => r.old ? -1 : i).filter(i => i >= 0));
     if (!$('bpal').value) $('bpal').value = `출장 측정/${today()}`;
     $('bmsg').textContent = BR.length ? `기계 기록 ${BR.length}개 (새 것 ${BON.size}개). 넣을 것을 고르십시오.` : '기계에 측정 기록이 없습니다. 방금 쟀다면 [다시 켜고 읽기]를 누르십시오.';
@@ -1033,6 +1485,12 @@ async function bulkRead(reboot){
 }
 $('bread').onclick = () => bulkRead(false);
 $('brb').onclick = () => bulkRead(true);
+$('bcmadd').onclick = async () => {
+  const rs = [...BON].sort((a, b) => b - a).map(i => BR[i]);   // 먼저 잰 것부터 번호
+  if (!rs.length) return toast('고른 색이 없습니다');
+  const ok = await cmAdd(rs.map(r => ({name: r.name || '기계 ' + r.when.slice(11, 16), lab: r.lab, date: r.when.slice(0, 16)})), '기계');
+  if (ok){ markDone(rs.map(bkey)); rs.forEach(r => r.old = true); BON = new Set(); bdraw(); $('bmsg').textContent = `이색 묶음 "${CMSEL}"에 ${rs.length}개를 넣었습니다. [이색 관리] 칸에서 판정을 보십시오.`; }
+};
 $('bgo').onclick = async () => {
   const rs = [...BON].sort((a, b) => b - a).map(i => BR[i]);   // 먼저 잰 것부터
   if (!rs.length) return toast('고른 색이 없습니다');

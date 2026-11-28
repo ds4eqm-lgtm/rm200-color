@@ -137,7 +137,7 @@ def cm_to_map(cm):
         d = {k: v for k, v in it.items() if k != "records"}
         recs = {}
         for r in it.get("records", []):
-            k = f"{r.get('date')}|{r.get('lot')}"
+            k = r.get("_k") or f"{r.get('date')}|{r.get('lot')}"   # Ver 0.58: 원본(ref)이 가리키는 키를 그대로
             while k in recs:
                 k += "+"
             recs[k] = r
@@ -148,10 +148,13 @@ def cm_to_map(cm):
 
 def map_to_cm(m):
     items = []
-    for name, d in m.items():
+    for name, d in (m or {}).items():
+        if not isinstance(d, dict) or not ("records" in d or "master" in d):
+            continue   # Ver 0.58: 앱 0.57이 넣었던 ref/ok/warn 같은 다른 칸은 건너뜀
         it = {k: v for k, v in d.items() if k != "records"}
         it["name"] = name
-        it["records"] = list(d.get("records", {}).values())
+        recs = d.get("records") or {}
+        it["records"] = [dict(r, _k=k) for k, r in recs.items() if isinstance(r, dict)] if isinstance(recs, dict) else list(recs)
         items.append(it)
     return {"items": items}
 
