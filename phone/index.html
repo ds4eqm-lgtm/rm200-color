@@ -87,7 +87,7 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
 <header>
   <div class="hrow"><span id="ver"></span><b>RM200 측색계 앱</b><span id="led"><i id="dot"></i><span id="ledt">기계 없음</span></span></div>
   <div id="online"></div>
-  <div id="newv"><button id="newvb">새 판 확인</button></div>
+  <div id="newv"><button id="newvb">새 판 확인</button> <button id="quit" style="background:#c62828;color:#fff;font-weight:700">마치기</button></div>
 </header>
 <nav>
   <button data-t="meas" class="on">측정</button>
@@ -127,6 +127,11 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
     <p>덮개를 닫아 흰 교정판 위에 두고 기계 위쪽 빨간 단추를 한 번 누르십시오. 끝나면 이 칸이 저절로 사라집니다.</p>
     <p class="note" style="margin:6px 0 0">0점은 색을 잴 때만 필요합니다. 출장에서 잰 색 불러오기(기계 기록 읽기)에는 필요 없습니다.</p>
   </div>
+  <div class="card" id="cmcard"><h4 style="margin:0 0 6px">이색 비교 (납품 타일 색 차이)</h4>
+    <div id="cmref" class="row" style="border-top:0"><span class="c" style="background:#eee"></span><div>기준 타일: 아직 없음</div></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0">합격 ΔE ≤ <input type="number" id="cmok" step="0.1" min="0.1" value="1.5" style="width:70px;font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px"> 주의 ≤ <input type="number" id="cmwarn" step="0.1" min="0.1" value="3" style="width:70px;font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px"> <span class="dim">넘으면 불합격</span></div>
+    <p class="note" style="margin:0">① 기준 타일(승인 견본)과 새로 들어온 타일을 기계 빨간 단추로 잽니다. 한 장에 서너 군데 재면 좋습니다.<br>② 아래 [다시 켜고 읽기]를 누릅니다(기계가 실제 잰 값을 꺼냄).<br>③ 목록에서 기준 타일 색 이름을 누르고 [기준 타일로 정하기]. 그 뒤 목록 오른쪽에 기준과의 ΔE와 합격·주의·불합격이 나옵니다.<br>④ 새 타일을 누르고 [이색 기록에 남기기]. 기록은 PC·다른 모바일 폰과 함께 봅니다.</p>
+    <details style="margin-top:8px"><summary class="dim">이색 기록 <span id="cmn"></span></summary><div id="cmlog"></div></details></div>
   <div class="card" id="dkcard"><h4 style="margin:0 0 6px">찾을 팬톤 견본책</h4>
     <select id="mdeck" style="width:100%;font:inherit;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:10px"><option value="">기계가 고른 견본책 그대로</option></select>
     <p class="note" style="margin:6px 0 0">재면 이 견본책에서 가장 가까운 팬톤색 1·2·3순위와, 내 팔레트에서 가까운 것을 바로 보여 줍니다.</p></div>
@@ -250,7 +255,7 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
 })();
 
 'use strict';
-const VER = '0.55';
+const VER = '0.57';
 const VID = 0x0765, PID = 0x6001;
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -596,9 +601,11 @@ const u16 = b => b && b.length >= 2 ? (b[0]<<8)|b[1] : null;
 const u32 = b => b && b.length >= 4 ? b[0]*16777216 + (b[1]<<16) + (b[2]<<8) + b[3] : null;
 async function openDev(d){
   dev = d;
-  await dev.open();
-  if (!dev.configuration || dev.configuration.configurationValue !== 1) await dev.selectConfiguration(1);
-  await dev.claimInterface(0);
+  try {
+    await dev.open();
+    if (!dev.configuration || dev.configuration.configurationValue !== 1) await dev.selectConfiguration(1);
+    await dev.claimInterface(0);
+  } catch(e){ try { await d.close(); } catch(x){} dev = null; throw e; }
   const s = u32(await cmd([0x78,0x11])); if (s) bufsize = s;
 }
 function utf16z(b, pos){ let e = pos; while (e < b.length-1 && !(b[e] === 0 && b[e+1] === 0)) e += 2; let s = ''; for (let i = pos; i < e; i += 2) s += String.fromCharCode(b[i] | (b[i+1]<<8)); return [s, e+2]; }
@@ -708,9 +715,45 @@ function deckOf(devDeck){
   if (!DKMAP){ DKMAP = new Map(); for (const x of PTL) if (x.deckN && !DKMAP.has(deckNorm(x.deckN))) DKMAP.set(deckNorm(x.deckN), x.deck); }
   return DKMAP.get(deckNorm(devDeck)) || null;
 }
+// ---- Ver 0.57: 이색 비교 (기준 타일 ↔ 새 타일, ΔE2000 · 합격/주의/불합격) — 공용 문서 rm200/cm {ref, ok, warn}, rm200/cm_log [기록]
+let CM = {ref: null, ok: 1.5, warn: 3};
+function cmJudge(de){ return de <= CM.ok ? ['합격', '#2e7d32'] : de <= CM.warn ? ['주의', '#ef6c00'] : ['불합격', '#c62828']; }
+function cmDraw(){
+  const r = CM.ref;
+  $('cmref').innerHTML = r ? `<span class="c" style="background:${lab2rgb(...r.lab)}"></span><div>기준 타일: <b>${esc(r.name)}</b><div class="dim">L ${(+r.lab[0]).toFixed(2)} a ${(+r.lab[1]).toFixed(2)} b ${(+r.lab[2]).toFixed(2)} · ${esc(r.who || '')} ${esc(r.when || '')}</div></div>` : '<span class="c" style="background:#eee"></span><div>기준 타일: 아직 없음</div>';
+  $('cmok').value = CM.ok; $('cmwarn').value = CM.warn;
+  if (typeof BR !== 'undefined' && BR.length) bdraw();
+}
+async function cmLoad(){ try { const [m] = await getDoc('rm200/cm'); if (m) CM = Object.assign(CM, m); } catch(e){} cmDraw(); cmLogLoad(); }
+async function cmSave(){ for (let i = 0; i < 5; i++){ try { const [, u] = await getDoc('rm200/cm'); if (await putDoc('rm200/cm', CM, u)) return true; } catch(e){} await sleep(300); } toast('공용 저장소에 저장하지 못했습니다(인터넷 확인)'); return false; }
+async function cmLogLoad(){
+  let L = []; try { const [m] = await getDoc('rm200/cm_log'); if (Array.isArray(m)) L = m; } catch(e){}
+  $('cmn').textContent = L.length ? `(${L.length}개)` : '';
+  $('cmlog').innerHTML = L.length ? L.map(x => { const [v, c] = cmJudge(x.de); return `<div class="row"><span class="c" style="background:${lab2rgb(...x.lab)}"></span><div>${esc(x.name)}<div class="dim">${esc(x.when)} · 기준 ${esc(x.ref)} · ${esc(x.who || '')}</div></div><small><b style="color:${c}">${v}</b><br>ΔE ${(+x.de).toFixed(2)}</small></div>`; }).join('') : '<div class="dim">아직 기록이 없습니다</div>';
+}
+async function cmSetRef(name, lab){
+  const t = new Date(); CM.ref = {name, lab: lab.map(Number), who: myName(), when: `${t.getMonth()+1}/${t.getDate()} ${t.toTimeString().slice(0,5)}`};
+  cmDraw(); $('pdet').classList.add('hidden'); toast(`기준 타일을 "${name}"(으)로 정했습니다`); await cmSave();
+}
+async function cmRecord(name, lab){
+  if (!CM.ref) return toast('먼저 기준 타일을 정하십시오');
+  const de = de2000(...CM.ref.lab, ...lab), [v] = cmJudge(de), t = new Date();
+  const item = {name, lab: lab.map(Number), de: Math.round(de * 100) / 100, v, ref: CM.ref.name, who: myName(), when: `${t.getMonth()+1}/${t.getDate()} ${t.toTimeString().slice(0,5)}`, t: Math.floor(t / 1000)};
+  for (let i = 0; i < 5; i++){
+    try { const [m, u] = await getDoc('rm200/cm_log'); const L = Array.isArray(m) ? m : []; if (await putDoc('rm200/cm_log', [item].concat(L).slice(0, 300), u)) break; } catch(e){}
+    await sleep(300);
+  }
+  $('pdet').classList.add('hidden'); toast(`이색 기록: ${name} ΔE ${item.de.toFixed(2)} ${v}`); cmLogLoad();
+}
+$('cmok').onchange = $('cmwarn').onchange = () => {
+  const a = +$('cmok').value, b = +$('cmwarn').value;
+  if (!(a > 0 && b >= a)){ toast('합격 값은 0보다 크고 주의 값보다 작거나 같아야 합니다'); cmDraw(); return; }
+  CM.ok = a; CM.warn = b; cmDraw(); cmSave();
+};
+cmLoad();
 // 잰 색 하나 자세히: 같은 견본책·모든 견본책에서 비슷한 팬톤, 우리 물건
-function measDetail(r){ return colorDetail('잰 색 ' + (r.when ? r.when.slice(5, 16) : ''), r.deck || '', r.lab, r.deck); }
-async function colorDetail(title, sub, lab, devDeck){
+function measDetail(r){ return colorDetail('잰 색 ' + (r.when ? r.when.slice(5, 16) : ''), r.deck || '', r.lab, r.deck, '잰 색 ' + (r.when ? r.when.slice(5, 16) : '')); }
+async function colorDetail(title, sub, lab, devDeck, cmName){
   await pantone().catch(() => null);
   const r = {lab};
   const dk = $('mdeck').value || deckOf(devDeck), same = dk ? ptNear(r.lab, 3, dk) : [], all = ptNear(r.lab, 3);
@@ -718,7 +761,10 @@ async function colorDetail(title, sub, lab, devDeck){
   const own = items.map(y => ({...y, de: de2000(...r.lab, ...y.lab)})).sort((a, b) => a.de - b.de).slice(0, 5);
   const row = y => `<div class="row tap" data-n="${esc(y.name)}"><span class="c" style="background:${lab2rgb(...y.lab)}"></span>PANTONE ${esc(y.name)}<small>ΔE ${y.de.toFixed(2)}<br>${esc(y.deck)}</small></div>`;
   const rk = L => '<div class="rk">' + L.map((x, i) => `<div class="${i ? '' : 'r1'} tap" data-n="${esc(x.name)}"><i style="background:${lab2rgb(...x.lab)}"></i><b>${i + 1}순위</b><span>${esc(x.name)}</span><small>ΔE ${x.de.toFixed(2)}</small></div>`).join('') + '</div>';
+  const nm = cmName || title;
+  const cmh = CM.ref ? (() => { const de = de2000(...CM.ref.lab, ...r.lab), [v, c] = cmJudge(de); return `<div class="msg" style="margin-top:8px">기준 타일 "${esc(CM.ref.name)}"과 차이 <b>ΔE ${de.toFixed(2)}</b> → <b style="color:${c}">${v}</b></div>`; })() : '';
   $('pdet').innerHTML = `<div class="sw" style="height:110px;background:${lab2rgb(...r.lab)}"></div><div class="code" style="font-size:21px">${esc(title)}</div><div class="dim">${esc(sub)} · L ${(+r.lab[0]).toFixed(1)} a ${(+r.lab[1]).toFixed(1)} b ${(+r.lab[2]).toFixed(1)}</div>`
+    + cmh + `<div style="display:flex;gap:8px"><button class="sub" id="cmset">기준 타일로 정하기</button>${CM.ref ? '<button class="sub" id="cmrec">이색 기록에 남기기</button>' : ''}</div>`
     + (same.length ? `<h4 style="margin-top:12px">${esc(dk)}에서 가장 가까운 팬톤색</h4>` + rk(same) : '')
     + `<h4 style="margin-top:12px">${same.length ? '모든 견본책에서' : '가장 가까운 팬톤색'}</h4>` + rk(all)
     + (own.length ? '<h4 style="margin-top:12px">우리 물건 중 가까운 것</h4>' + own.map(y => `<div class="row"><span class="c" style="background:${lab2rgb(...y.lab)}"></span>${esc(y.name)}<small>ΔE ${y.de.toFixed(2)}<br>${esc(y.pal)}</small></div>`).join('') : '')
@@ -726,6 +772,8 @@ async function colorDetail(title, sub, lab, devDeck){
   $('pdet').classList.remove('hidden');
   $('pdetx').onclick = () => $('pdet').classList.add('hidden');
   $('pdet').querySelectorAll('.row.tap,.rk .tap').forEach(e => e.onclick = () => openInDeck(e.dataset.n));
+  $('cmset').onclick = () => cmSetRef(nm, r.lab);
+  if ($('cmrec')) $('cmrec').onclick = () => cmRecord(nm, r.lab);
 }
 // 팬톤색 보기에서 그 색 찾아 보이기
 async function openInDeck(name){
@@ -867,6 +915,25 @@ if ('usb' in navigator){
   navigator.usb.addEventListener('disconnect', ev => { if (dev && ev.device === dev){ dev = null; clearTimeout(calTimer); $('cal').style.display = 'none'; $('bulk').style.display = 'none'; led('off', '기계 없음'); $('go').textContent = '기계 연결'; say('기계가 빠졌습니다. 다시 꽂으면 저절로 연결합니다.', true); } });
   navigator.usb.addEventListener('connect', ev => { if (!dev && ev.device.vendorId === VID) openDev(ev.device).then(connected).catch(() => { dev = null; }); });
   navigator.usb.getDevices().then(ds => { const d = ds.find(x => x.vendorId === VID && x.productId === PID); if (d && !dev) openDev(d).then(connected).catch(() => { dev = null; }); });
+  // Ver 0.56: 연결이 안 되어 있으면 3초마다 저절로 다시 연결(다른 앱·화면이 기계를 놓으면 바로 잡음)
+  let tryBusy = false, heldMsg = false;
+  setInterval(async () => {
+    if (dev || tryBusy || document.hidden || quitting) return;
+    tryBusy = true;
+    try {
+      const d = (await navigator.usb.getDevices()).find(x => x.vendorId === VID && x.productId === PID);
+      if (d){ led('work', '연결 중'); await openDev(d); heldMsg = false; connected(); }
+    } catch(e){
+      led('off', '기계 기다리는 중');
+      if (!heldMsg){ heldMsg = true; say('다른 앱이나 다른 화면이 기계를 쓰고 있습니다. 그쪽에서 [마치기]를 누르면 여기서 저절로 연결합니다.', true); }
+    } finally { tryBusy = false; }
+  }, 3000);
+  // 다른 앱으로 가면(8초 뒤) 기계를 놓아 다른 앱이 쓸 수 있게 함. 돌아오면 위에서 저절로 다시 잡음
+  let hideT = null;
+  document.addEventListener('visibilitychange', () => {
+    clearTimeout(hideT);
+    if (document.hidden) hideT = setTimeout(() => { if (document.hidden && dev && !busy) releaseDev('다른 화면으로 가서 기계를 놓았습니다. 돌아오면 저절로 다시 연결합니다.'); }, 8000);
+  });
 } else {
   $('nousb').style.display = 'block'; $('usbcard').style.display = 'none';
 }
@@ -918,7 +985,7 @@ function today(){ const t = new Date(); return `${t.getFullYear()}-${String(t.ge
 function bdraw(){
   $('bsel').classList.toggle('hidden', !BR.length); $('btip').classList.toggle('hidden', !BR.length);
   $('bcnt').textContent = `${BON.size} / ${BR.length}개`;
-  $('blist').innerHTML = BR.map((r, i) => `<div class="row tap" data-i="${i}" style="${r.old ? 'opacity:.55' : ''}"><span class="ck" style="padding:8px 6px 8px 0"><input type="checkbox" ${BON.has(i) ? 'checked' : ''} style="width:24px;height:24px;flex:none;pointer-events:none;display:block"></span><span class="c" style="background:${lab2rgb(...r.lab)}"></span><div>${esc(r.name || (r.pt ? r.pt.name : '측정'))}<div class="dim">${esc(r.when.slice(5,16))} · L ${r.lab[0]} a ${r.lab[1]} b ${r.lab[2]}</div></div><small>${r.pt ? esc(r.pt.name) + '<br>ΔE ' + r.pt.de.toFixed(2) : ''}${r.old ? '<br>들여옴' : ''}</small></div>`).join('');
+  $('blist').innerHTML = BR.map((r, i) => `<div class="row tap" data-i="${i}" style="${r.old ? 'opacity:.55' : ''}"><span class="ck" style="padding:8px 6px 8px 0"><input type="checkbox" ${BON.has(i) ? 'checked' : ''} style="width:24px;height:24px;flex:none;pointer-events:none;display:block"></span><span class="c" style="background:${lab2rgb(...r.lab)}"></span><div>${esc(r.name || (r.pt ? r.pt.name : '측정'))}<div class="dim">${esc(r.when.slice(5,16))} · L ${r.lab[0]} a ${r.lab[1]} b ${r.lab[2]}</div></div><small>${CM.ref ? (() => { const de = de2000(...CM.ref.lab, ...r.lab), [v, c] = cmJudge(de); return `<b style="color:${c}">${v}</b><br>기준 ΔE ${de.toFixed(2)}`; })() : r.pt ? esc(r.pt.name) + '<br>ΔE ' + r.pt.de.toFixed(2) : ''}${r.old ? '<br>들여옴' : ''}</small></div>`).join('');
   $('bput').classList.toggle('hidden', !BR.length);
   $('bgo').textContent = `고른 색 ${BON.size}개 내 팔레트에 넣기`;
 }
@@ -1031,6 +1098,25 @@ $('shok').onclick = async () => {
 if (window.RMAPP){
   $('inst').onclick = () => { const r = RMAPP.pin(); toast(r === 'ok' ? '바탕화면에 아이콘을 만들었습니다' : '앱 서랍의 RM200 측색계 아이콘을 길게 눌러 홈 화면에 끌어다 놓으십시오'); };
 } else if (IS_ANDROID){ $('apkget').classList.remove('hidden'); $('apkget').style.display = 'block'; $('apknote').classList.remove('hidden'); }
+// Ver 0.56: [마치기] 기계를 놓고 앱을 닫음(다른 앱·PC가 바로 쓸 수 있게)
+let quitting = false;
+async function releaseDev(msg){
+  const d = dev; if (!d) return;
+  dev = null; clearTimeout(calTimer); clearTimeout(idleT);
+  try { await d.releaseInterface(0); } catch(e){}
+  try { await d.close(); } catch(e){}
+  $('cal').style.display = 'none'; $('bulk').style.display = 'none'; led('off', '기계 놓음'); $('go').textContent = '기계 연결';
+  if (msg) say(msg);
+}
+$('quit').onclick = async () => {
+  if (busy && !confirm('기계와 주고받는 중입니다. 멈추고 마칠까요?')) return;
+  quitting = true;
+  await releaseDev('기계를 놓았습니다. 이제 다른 앱이나 PC에서 기계를 쓸 수 있습니다.');
+  if (window.RMAPP && RMAPP.quit) { RMAPP.quit(); return; }
+  window.close();
+  setTimeout(() => toast('기계를 놓았습니다. 이 화면은 최근 앱 목록에서 위로 밀어 닫으십시오. 다시 쓰려면 [기계 연결]을 누르십시오.'), 400);
+  setTimeout(() => { quitting = false; }, 15000);
+};
 // ---------------------------------------------------------------- 주소 나눠 주기 (맨 아래 한 곳)
 const URL0 = location.href.split('#')[0].split('?')[0];
 document.querySelectorAll('[data-s]').forEach(b => b.onclick = async () => {
