@@ -125,6 +125,7 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
   <div class="card" id="cal">
     <h3>0점 맞추기(교정)가 필요합니다</h3>
     <p>덮개를 닫아 흰 교정판 위에 두고 기계 위쪽 빨간 단추를 한 번 누르십시오. 끝나면 이 칸이 저절로 사라집니다.</p>
+    <p class="note" style="margin:6px 0 0">0점은 색을 잴 때만 필요합니다. 출장에서 잰 색 불러오기(기계 기록 읽기)에는 필요 없습니다.</p>
   </div>
   <div class="card" id="dkcard"><h4 style="margin:0 0 6px">찾을 팬톤 견본책</h4>
     <select id="mdeck" style="width:100%;font:inherit;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:10px"><option value="">기계가 고른 견본책 그대로</option></select>
@@ -249,7 +250,7 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
 })();
 
 'use strict';
-const VER = '0.54';
+const VER = '0.55';
 const VID = 0x0765, PID = 0x6001;
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -367,7 +368,8 @@ async function mdeckInit(){
   $('mdeck').innerHTML = '<option value="">기계가 고른 견본책 그대로</option>' + [...m].map(([k, n]) => `<option value="${esc(k)}">${esc(k)} (${n}색)</option>`).join('');
   if (m.has(cur)) $('mdeck').value = cur;
 }
-$('mdeck').onchange = () => { try { localStorage.setItem('rm200_mdeck', $('mdeck').value); } catch(e){} toast($('mdeck').value ? `이제 ${$('mdeck').value}에서 찾습니다` : '기계가 고른 견본책에서 찾습니다'); };
+$('mdeck').onchange = () => { try { localStorage.setItem('rm200_mdeck', $('mdeck').value); } catch(e){}
+  if (typeof BR !== 'undefined' && BR && BR.length){ BR.forEach(r => { r.pt = ptNear(r.lab, 1, $('mdeck').value || deckOf(r.deck))[0] || r.pt; }); bdraw(); } toast($('mdeck').value ? `이제 ${$('mdeck').value}에서 찾습니다` : '기계가 고른 견본책에서 찾습니다'); };
 mdeckInit().catch(() => {});
 async function ptDetail(x){
   const items = palItems(await palettes());
@@ -621,11 +623,13 @@ async function watchCal(){
   try {
     const c = await calib();
     if (c.ok){ if ($('cal').style.display === 'block') say(`0점 맞추기 끝 (${Math.floor(c.left/60)}분 남음). [측정]을 누르십시오.`); $('cal').style.display = 'none'; led('ok', `연결됨 · 교정 ${Math.floor(c.left/60)}분`); calTimer = setTimeout(watchCal, 30000); return; }
+    if (Date.now() < calQuiet){ calTimer = setTimeout(watchCal, 3000); return; }   // Ver 0.55
     $('cal').style.display = 'block'; led('work', '교정 필요');
   } catch(e){}
   calTimer = setTimeout(watchCal, 2000);
 }
-async function connected(){ lastCount = null; idleTick(); $('bulk').style.display = 'block'; led('ok', '연결됨'); $('go').textContent = '측정'; say('연결했습니다. 기계를 잴 곳에 대고 [측정]을 누르십시오.'); watchCal(); }
+let CONNS = 0, calQuiet = 0;
+async function connected(){ CONNS++; lastCount = null; idleTick(); $('bulk').style.display = 'block'; led('ok', '연결됨'); $('go').textContent = '측정'; say('연결했습니다. 기계를 잴 곳에 대고 [측정]을 누르십시오.'); watchCal(); }
 async function measure(){
   if (busy) return;
   busy = true; $('go').disabled = true; led('work', '재는 중');
@@ -932,16 +936,26 @@ async function bulkRead(reboot){
   try {
     if (reboot){
       $('bmsg').textContent = '기계를 다시 켜는 중... (20초쯤)';
+      // Ver 0.55: 다시 켠 뒤 '새로 연결된 기계'를 기다리고(예전 연결로 읽다가 시간 초과 나던 것 고침), 읽기도 몇 번 다시 해 봄
+      const c0 = CONNS; calQuiet = Date.now() + 90000;
       rebootOK = true; try { await cmd([0x77,0x14]); } catch(e){} rebootOK = false;
       busy = false; await sleep(4000);
-      if (!(await waitBack(45000))) throw new Error('다시 켠 뒤 기계가 돌아오지 않았습니다. 선을 다시 꽂으십시오');
+      const t0 = Date.now();
+      while (CONNS === c0 && Date.now() - t0 < 45000){ await sleep(500); $('bmsg').textContent = `기계를 다시 켜는 중... ${Math.round((Date.now() - t0) / 1000) + 4}초`; }
+      if (CONNS === c0 && !dev) throw new Error('다시 켠 뒤 기계가 돌아오지 않았습니다. 선을 뺐다 다시 꽂고 [기계 기록 읽기]를 누르십시오');
+      await sleep(2500);
+      while (busy) await sleep(300);
       busy = true;
     }
-    $('bmsg').textContent = '기계 기록을 읽는 중...';
-    const recs = parseMeas(await fetchMeas());
+    let recs = null, err = null;
+    for (let i = 0; i < 4 && !recs; i++){
+      $('bmsg').textContent = '기계 기록을 읽는 중...' + (i ? ` (다시 ${i}번째)` : ''); $('bmsg').className = 'msg';
+      try { recs = parseMeas(await fetchMeas()); } catch(e){ err = e; dirty = true; await sleep(2500); }
+    }
+    if (!recs) throw err;
     await pantone().catch(() => null);
     const done = doneKeys();
-    BR = recs.map(r => ({...r, pt: ptNear(r.lab, 1, deckOf(r.deck))[0] || nearestPT(r.lab), old: done.has(bkey(r))}));
+    BR = recs.map(r => ({...r, pt: ptNear(r.lab, 1, $('mdeck').value || deckOf(r.deck))[0] || nearestPT(r.lab), old: done.has(bkey(r))}));
     BON = new Set(BR.map((r, i) => r.old ? -1 : i).filter(i => i >= 0));
     if (!$('bpal').value) $('bpal').value = `출장 측정/${today()}`;
     $('bmsg').textContent = BR.length ? `기계 기록 ${BR.length}개 (새 것 ${BON.size}개). 넣을 것을 고르십시오.` : '기계에 측정 기록이 없습니다. 방금 쟀다면 [다시 켜고 읽기]를 누르십시오.';
