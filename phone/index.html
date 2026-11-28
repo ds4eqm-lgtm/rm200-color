@@ -329,7 +329,7 @@ footer{max-width:640px;margin:0 auto;padding:0 16px 28px}
 })();
 
 'use strict';
-const VER = '0.63';
+const VER = '0.64';
 const VID = 0x0765, PID = 0x6001;
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -1622,6 +1622,8 @@ function checkUpdate(){
   }).catch(() => {});
 }
 checkUpdate(); setInterval(checkUpdate, 30 * 60 * 1000);
+// Ver 0.64: 다른 화면에서 돌아오면 바로 새 판 확인
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkUpdate(); });
 </script>
 </body>
 </html>
